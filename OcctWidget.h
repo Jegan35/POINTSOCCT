@@ -1,0 +1,120 @@
+#ifndef OCCTWIDGET_H
+#define OCCTWIDGET_H
+
+#include <QWidget>
+#include <AIS_InteractiveContext.hxx>
+#include <V3d_Viewer.hxx>
+#include <V3d_View.hxx>
+#include <OpenGl_GraphicDriver.hxx>
+#include <TopExp_Explorer.hxx>
+#include <BRepAdaptor_Curve.hxx>
+#include <BRepAdaptor_CompCurve.hxx>
+#include <GCPnts_UniformAbscissa.hxx>
+#include <BRep_Tool.hxx>
+
+#include <TopoDS_Edge.hxx>
+#include <TopoDS_Wire.hxx>
+#include <TopoDS_Face.hxx>
+
+#include <AIS_Trihedron.hxx>
+#include <Geom_Axis2Placement.hxx>
+#include <AIS_Shape.hxx>
+
+#include <vector>
+
+// ADD THIS TO KILL THE X11 MACRO CLASH
+#ifdef None
+#undef None
+#endif
+
+class QTextStream;
+
+// Data structure to remember everything about a click
+struct PathData {
+    TopoDS_Shape shape;
+    Handle(AIS_Shape) visualRedPath;
+    double resolution;
+};
+
+class OcctWidget : public QWidget
+{
+    Q_OBJECT
+public:
+    explicit OcctWidget(QWidget *parent = nullptr);
+    ~OcctWidget() override;
+
+    // Defines whether this widget acts as the Main Left screen or the Isolated Right screen
+    enum ViewRole { MainRole, SideRole };
+    void setViewRole(ViewRole role) { myRole = role; }
+
+    void loadStepFile(const std::string& filePath);
+    void loadDefaultRobot();
+
+    // Shifts the loaded workpiece for calibration
+    void offsetWorkpiece(double dx, double dy, double dz);
+
+    void setSelectionMode(int mode);
+    void enableOriginSelectionMode();
+    void resetOrigin();
+
+    // Side panel display
+    void displayIsolatedPart(const TopoDS_Shape& shape);
+
+    // Public slots to trigger from MainWindow buttons
+    void undoSelection();
+    void redoSelection();
+    void clearSelections();
+
+signals:
+    void statusUpdate(const QString& msg);
+    void partSelectedForIsolation(const TopoDS_Shape& shape);
+    void coordinatesExtracted(const QString& xyzData);
+
+protected:
+    QPaintEngine* paintEngine() const override { return nullptr; }
+
+    void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
+
+private:
+    int myCurrentLoadIndex = -1;
+    void loadNextRobotLink();
+    ViewRole myRole = MainRole;
+    int myCurrentSelectionMode = 1; // Remembers the dropdown state
+
+    Handle(V3d_Viewer) myViewer;
+    Handle(V3d_View) myView;
+    Handle(AIS_InteractiveContext) myContext;
+    Handle(OpenGl_GraphicDriver) myGraphicDriver;
+
+    // Remembers the loaded table/workpiece so we can offset it
+    Handle(AIS_Shape) myLoadedPart;
+
+    QPoint myLastMousePos;
+
+    bool myIsSettingOriginMode = false;
+    gp_Pnt myCustomOrigin{0.0, 0.0, 0.0};
+    gp_Pnt myDefaultOrigin{0.0, 0.0, 0.0};
+    Handle(AIS_Trihedron) myOriginMarker;
+
+    // Variables to manage History and the CSV
+    std::vector<PathData> myPathHistory;
+    std::vector<PathData> myRedoStack;
+    QString myCSVPath;
+
+    void initOCCT();
+    void drawRoomGrid();
+
+    // Centralized file writer
+    void processCurrentSelection();
+    void regenerateCSV();
+
+    void processEdge(const TopoDS_Edge& edge, QTextStream& out, double resolution);
+    void processWire(const TopoDS_Wire& wire, QTextStream& out, double resolution);
+    void processFace(const TopoDS_Face& face, QTextStream& out, double resolution);
+};
+
+#endif // OCCTWIDGET_H
