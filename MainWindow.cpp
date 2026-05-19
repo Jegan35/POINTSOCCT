@@ -9,7 +9,13 @@
 #include <QComboBox>
 #include <QSplitter>
 #include <QTextEdit>
-
+#include "kinematic.h"
+// Add these with your other Qt headers at the top of MainWindow.cpp!
+#include <QTabWidget>
+#include <QRadioButton>
+#include <QGridLayout>
+#include <QGroupBox>
+#include <QLabel>
 // ✅ NEW: Headers required for the Position Part dialog
 #include <QDialog>
 #include <QFormLayout>
@@ -45,11 +51,122 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     mySideWidget->setViewRole(OcctWidget::SideRole); // ✅ Tell it to act like the Side View
     rightSplitter->addWidget(mySideWidget);
 
-    // Bottom 50% of Right Panel: XYZ Text Output
-    myCoordinateLog = new QTextEdit(this);
+    // ==========================================
+    // ✅ BOTTOM 50% TABS (XYZ Log & Jog Controls)
+    // ==========================================
+    QTabWidget *bottomTabs = new QTabWidget(rightPanel);
+    bottomTabs->setStyleSheet(
+        "QTabWidget::pane { border: 2px solid #3E3E42; background: #2D2D30; } "
+        "QTabBar::tab { background: #1E1E1E; color: white; padding: 8px 20px; font-weight: bold; border-right: 1px solid #3E3E42; } "
+        "QTabBar::tab:selected { background: #007ACC; color: white; }"
+        );
+
+    // --- TAB 1: The XYZ Coordinate Log ---
+    myCoordinateLog = new QTextEdit(bottomTabs);
     myCoordinateLog->setReadOnly(true);
-    myCoordinateLog->setStyleSheet("background-color: #1E1E1E; color: #00FF00; font-family: monospace;");
-    rightSplitter->addWidget(myCoordinateLog);
+    myCoordinateLog->setStyleSheet("background-color: #1E1E1E; color: #00FF00; font-family: monospace; border: none;");
+    bottomTabs->addTab(myCoordinateLog, "XYZ Paths");
+
+    // --- TAB 2: The Robot Jog / Move Controller ---
+    QWidget *jogTab = new QWidget(bottomTabs);
+    QVBoxLayout *jogLayout = new QVBoxLayout(jogTab);
+
+    // Top Section: Jog vs Move
+    QGroupBox *grpMode = new QGroupBox("Operation Mode");
+    grpMode->setStyleSheet("color: white; font-weight: bold;");
+    QHBoxLayout *modeLayout = new QHBoxLayout(grpMode);
+    QRadioButton *rdoJog = new QRadioButton("JOG (Continuous)");
+    QRadioButton *rdoMove = new QRadioButton("MOVE (To Destination)");
+    rdoJog->setChecked(true); // Default to JOG
+    modeLayout->addWidget(rdoJog);
+    modeLayout->addWidget(rdoMove);
+    jogLayout->addWidget(grpMode);
+
+    // ==========================================
+    // ✅ MIDDLE SECTION: JOG STEP & SPEED TRAY
+    // ==========================================
+    QGroupBox *grpUnits = new QGroupBox("Step Size & Speed");
+    grpUnits->setStyleSheet("color: white; font-weight: bold;");
+    QGridLayout *unitLayout = new QGridLayout(grpUnits);
+
+    QString comboStyle = "QComboBox { background-color: #1E1E1E; color: white; padding: 3px; border: 1px solid #3E3E42; }";
+
+    // 1. Degree Combobox
+    QLabel *lblDeg = new QLabel("Deg:");
+    QComboBox *cmbDeg = new QComboBox();
+    cmbDeg->addItems({"20", "15", "10", "5", "2", "1", "0.1", "0.01", "0.001", "0.0001"});
+    cmbDeg->setEditable(true); // Allows typing custom numbers!
+    cmbDeg->setCurrentText("1");
+    cmbDeg->setStyleSheet(comboStyle);
+
+    // 2. mm Combobox
+    QLabel *lblMm = new QLabel("mm:");
+    QComboBox *cmbMm = new QComboBox();
+    cmbMm->addItems({"50", "25", "15", "10", "5", "2", "1", "0.1", "0.01", "0.001"});
+    cmbMm->setEditable(true);
+    cmbMm->setCurrentText("10");
+    cmbMm->setStyleSheet(comboStyle);
+
+    // 3. DPS (Degrees Per Second) Combobox
+    QLabel *lblDps = new QLabel("DPS:");
+    QComboBox *cmbDps = new QComboBox();
+    cmbDps->addItems({"50", "25", "10", "5", "1"});
+    cmbDps->setEditable(true);
+    cmbDps->setCurrentText("25");
+    cmbDps->setStyleSheet(comboStyle);
+
+    // 4. mm/s Combobox
+    QLabel *lblMms = new QLabel("mm/s:");
+    QComboBox *cmbMms = new QComboBox();
+    cmbMms->addItems({"100", "50", "25", "10", "5"});
+    cmbMms->setEditable(true);
+    cmbMms->setCurrentText("50");
+    cmbMms->setStyleSheet(comboStyle);
+
+    unitLayout->addWidget(lblDeg, 0, 0); unitLayout->addWidget(cmbDeg, 0, 1);
+    unitLayout->addWidget(lblMm, 1, 0);  unitLayout->addWidget(cmbMm, 1, 1);
+    unitLayout->addWidget(lblDps, 0, 2); unitLayout->addWidget(cmbDps, 0, 3);
+    unitLayout->addWidget(lblMms, 1, 2); unitLayout->addWidget(cmbMms, 1, 3);
+    jogLayout->addWidget(grpUnits);
+
+    // ==========================================
+    // ✅ BOTTOM SECTION: J1 TO J6 GRID
+    // ==========================================
+    QGroupBox *grpJoints = new QGroupBox("Joint Controls");
+    grpJoints->setStyleSheet("color: white; font-weight: bold;");
+    QGridLayout *jGrid = new QGridLayout(grpJoints);
+
+    for(int i = 1; i <= 6; i++) {
+        QLabel *lbl = new QLabel(QString("J%1 :").arg(i));
+        QPushButton *btnMinus = new QPushButton("-");
+        QPushButton *btnPlus = new QPushButton("+");
+
+        QString btnStyle = "QPushButton { background-color: #3E3E42; color: white; font-size: 16px; font-weight: bold; padding: 5px; min-width: 40px; } "
+                           "QPushButton:pressed { background-color: #007ACC; }";
+        btnMinus->setStyleSheet(btnStyle);
+        btnPlus->setStyleSheet(btnStyle);
+
+        jGrid->addWidget(lbl, i-1, 0);
+        jGrid->addWidget(btnMinus, i-1, 1);
+        jGrid->addWidget(btnPlus, i-1, 2);
+
+        // 🛠 WIRING: Read BOTH the Step and Speed Comboboxes live!
+        connect(btnPlus, &QPushButton::clicked, this, [this, i, rdoMove, cmbDeg, cmbDps]() {
+            double step = cmbDeg->currentText().toDouble();
+            double speed = cmbDps->currentText().toDouble();
+            handleRobotJog(i, 1.0, rdoMove->isChecked(), step, speed);
+        });
+        connect(btnMinus, &QPushButton::clicked, this, [this, i, rdoMove, cmbDeg, cmbDps]() {
+            double step = cmbDeg->currentText().toDouble();
+            double speed = cmbDps->currentText().toDouble();
+            handleRobotJog(i, -1.0, rdoMove->isChecked(), step, speed);
+        });
+    }
+    jogLayout->addWidget(grpJoints);
+    jogLayout->addStretch();
+
+    bottomTabs->addTab(jogTab, "Robot Control");
+    rightSplitter->addWidget(bottomTabs);
 
     rightLayout->addWidget(rightSplitter);
     mainSplitter->addWidget(rightPanel);
@@ -156,6 +273,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     QTimer::singleShot(500, this, [this]() {
         myMainWidget->loadDefaultRobot();
     });
+    // ==========================================
+    // ✅ CRITICAL FIX: INITIALIZE KINEMATICS
+    // This builds the KDLJoint arrays so they don't crash when clicked!
+    // ==========================================
+    kinematic startupKine;
+    startupKine.Init();
 } // <--- End of MainWindow constructor
 
 MainWindow::~MainWindow() {}
@@ -175,5 +298,35 @@ void MainWindow::openLoadDialog()
     QString fileName = QFileDialog::getOpenFileName(this, tr("Open STEP File"), "", tr("STEP Files (*.step *.stp);;All Files (*)"));
     if (!fileName.isEmpty()) {
         myMainWidget->loadStepFile(fileName.toStdString());
+    }
+}
+
+void MainWindow::handleRobotJog(int jointNumber, double direction, bool isMoveMode, double stepSizeDeg, double speedDps)
+{
+    if (isMoveMode) {
+        // MOVE MODE (Inverse Kinematics)
+        qDebug() << "Executing MOVE calculation for J" << jointNumber;
+
+        // TODO: We will write the IK logic here next! For now, we leave it empty.
+
+    } else {
+        // JOG MODE (Forward Kinematics)
+        qDebug() << "Executing JOG for J" << jointNumber << "| Step:" << stepSizeDeg << "deg | Speed:" << speedDps << "dps";
+
+        // 1. Update the KDL Mathematical Array
+        KDLJointCur(jointNumber - 1) += (direction * stepSizeDeg * (M_PI / 180.0));
+
+        kinematic myKine;
+        if(myKine.Fk()) {
+            qDebug() << "FK Success. Tool -> X:" << cart.p.x() << " Y:" << cart.p.y() << " Z:" << cart.p.z();
+
+            // ==========================================
+            // ✅ THE FINAL LINK: Move the 3D Graphics!
+            // ==========================================
+            myMainWidget->updateRobotPosture(
+                KDLJointCur(0), KDLJointCur(1), KDLJointCur(2),
+                KDLJointCur(3), KDLJointCur(4), KDLJointCur(5)
+                );
+        }
     }
 }

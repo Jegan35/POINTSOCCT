@@ -22,6 +22,7 @@ private slots:
 
     // NEW: Catches the click from the main view to update the side panel
     void onPartSelected(const TopoDS_Shape& shape, const QString& xyzData);
+    void handleRobotJog(int jointNumber, double direction, bool isMoveMode, double stepSizeDeg, double speedDps);
 
 private:
     OcctWidget *myMainWidget;    // 70% Left View

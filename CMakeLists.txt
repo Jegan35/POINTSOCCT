@@ -11,6 +11,8 @@ set(CMAKE_AUTOUIC ON)
 # Use Qt Widgets instead of QML/Quick
 find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGL)
 find_package(OpenCASCADE REQUIRED)
+# Tell the compiler where to find the Eigen3 math headers for KDL
+include_directories(/usr/include/eigen3)
 
 qt_add_executable(appOCCT
     main.cpp
@@ -28,7 +30,7 @@ target_link_libraries(appOCCT
     Qt6::OpenGL
     TKernel TKMath TKG2d TKG3d TKGeomBase TKGeomAlgo TKBRep TKTopAlgo
     TKMesh TKService TKOpenGl TKV3d TKXSBase TKSTEP TKSTEPBase TKSTEPAttr
-    TKIGES TKShHealing TKSTL
+    TKIGES TKShHealing TKSTL orocos-kdl
 )
 
 target_include_directories(appOCCT PRIVATE ${OpenCASCADE_INCLUDE_DIR})

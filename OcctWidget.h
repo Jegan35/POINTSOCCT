@@ -64,6 +64,7 @@ public:
     void undoSelection();
     void redoSelection();
     void clearSelections();
+    void updateRobotPosture(double j1, double j2, double j3, double j4, double j5, double j6);
 
 signals:
     void statusUpdate(const QString& msg);
@@ -79,6 +80,7 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 
+
 private:
     int myCurrentLoadIndex = -1;
     void loadNextRobotLink();
@@ -92,7 +94,7 @@ private:
 
     // Remembers the loaded table/workpiece so we can offset it
     Handle(AIS_Shape) myLoadedPart;
-
+    std::vector<Handle(AIS_InteractiveObject)> myRobotLinks;
     QPoint myLastMousePos;
 
     bool myIsSettingOriginMode = false;

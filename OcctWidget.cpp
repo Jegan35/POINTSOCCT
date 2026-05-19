@@ -653,22 +653,14 @@ void OcctWidget::loadNextRobotLink()
 
     if (!mesh.IsNull()) {
         // Wrap the raw mesh into a displayable object
+        // Wrap the raw mesh into a displayable object
         Handle(AIS_Triangulation) aisShape = new AIS_Triangulation(mesh);
 
-        // Scale the STL
-        gp_Trsf scaleTrsf;
-        scaleTrsf.SetScale(gp_Pnt(0,0,0), 1000.0);
-
-        // ✅ ROTATE: Turn the robot 90 degrees to face straight toward the camera
-        // Note: If it faces the wrong way, just change the negative sign! (Standard_PI / 2.0)
-        // ✅ ROTATE: Turn the robot 90 degrees using C++ M_PI
-        gp_Trsf rotTrsf;
-        rotTrsf.SetRotation(gp_Ax1(gp_Pnt(0,0,0), gp_Dir(0,0,1)), -M_PI / 2.0);
-
-        // Combine Rotation and Scale, then apply
-        gp_Trsf finalTrsf = rotTrsf * scaleTrsf;
-        TopLoc_Location loc(finalTrsf);
-        myContext->SetLocation(aisShape, loc);
+        // ✅ CRITICAL FIX: DO NOT apply scaling or rotation during load!
+        // Just force it to true absolute zero.
+        // Our updateRobotPosture() function will handle ALL scaling and math.
+        gp_Trsf zeroTrsf;
+        myContext->SetLocation(aisShape, TopLoc_Location(zeroTrsf));
 
         // Apply Industrial Colors
         Quantity_Color partColor;
@@ -679,7 +671,7 @@ void OcctWidget::loadNextRobotLink()
         myContext->SetColor(aisShape, partColor, Standard_False);
 
         myContext->Display(aisShape, Standard_False);
-
+        myRobotLinks.push_back(aisShape);
         // ✅ THE GHOST TRICK: DEACTIVATE SELECTION
         myContext->Deactivate(aisShape);
 
@@ -693,11 +685,93 @@ void OcctWidget::loadNextRobotLink()
 
     // 4. Update the UI text and trigger the next loop
     if (myCurrentLoadIndex <= 5) {
+        updateRobotPosture(0, 0, 0, 0, 0, 0);
         emit statusUpdate(QString("⏳ Loading Raw Mesh (link%1.stl)...").arg(myCurrentLoadIndex));
     }
 
     QTimer::singleShot(50, this, &OcctWidget::loadNextRobotLink);
 }
+
+
+
+
+
+
+
+void OcctWidget::updateRobotPosture(double j1, double j2, double j3, double j4, double j5, double j6)
+{
+    if (myRobotLinks.empty()) return;
+
+    // 1. Base Scale (Assuming STLs are in Meters, scale to MM)
+    gp_Trsf baseTrsf;
+    baseTrsf.SetScale(gp_Pnt(0,0,0), 1000.0);
+
+    // ========================================================
+    // ✅ NEW: GLOBAL WORLD ROTATION
+    // This spins the ENTIRE assembled robot 90 degrees around Z
+    // to match the facing direction of your main project!
+    // ========================================================
+    gp_Trsf globalRot;
+    // NOTE: If the robot faces backward, just remove the negative sign -> (M_PI / 2.0)
+    globalRot.SetRotation(gp_Ax1(gp_Pnt(0,0,0), gp_Dir(0,0,1)), -M_PI / 2.0);
+
+    // ========================================================
+    // 2. TRUE ABSOLUTE KINEMATIC ORIGINS (In Millimeters)
+    // ========================================================
+    gp_Pnt orig1(0.0, 0.0, 0.0);       // J1 Pivot (Base to Turret)
+    gp_Pnt orig2(150.0, 0.0, 462.0);   // J2 Pivot (Shoulder)
+    gp_Pnt orig3(150.0, 0.0, 1062.0);  // J3 Pivot (Elbow)
+    gp_Pnt orig4(150.0, 0.0, 1252.0);  // J4 Pivot (Forearm Roll)
+    gp_Pnt orig5(837.0, 0.0, 1252.0);  // J5 Pivot (Wrist Pitch)
+    gp_Pnt orig6(837.0, 0.0, 1252.0);  // J6 Pivot (Wrist Roll Flange)
+
+    // ========================================================
+    // 3. ROTATION AXES (Matching your KDL perfectly)
+    // ========================================================
+    gp_Dir axis1(0, 0, 1); // J1: RotZ
+    gp_Dir axis2(0, 1, 0); // J2: RotY
+    gp_Dir axis3(0, 1, 0); // J3: RotY
+    gp_Dir axis4(1, 0, 0); // J4: RotX
+    gp_Dir axis5(0, 1, 0); // J5: RotY
+    gp_Dir axis6(1, 0, 0); // J6: RotX
+
+    // 4. Create pure rotation transformations around those absolute pins
+    gp_Trsf R1, R2, R3, R4, R5, R6;
+    R1.SetRotation(gp_Ax1(orig1, axis1), j1);
+    R2.SetRotation(gp_Ax1(orig2, axis2), j2);
+    R3.SetRotation(gp_Ax1(orig3, axis3), j3);
+    R4.SetRotation(gp_Ax1(orig4, axis4), j4);
+    R5.SetRotation(gp_Ax1(orig5, axis5), j5);
+    R6.SetRotation(gp_Ax1(orig6, axis6), j6);
+
+    // ========================================================
+    // 5. HIERARCHICAL ACCUMULATION
+    // ========================================================
+    gp_Trsf accum1 = R1;
+    gp_Trsf accum2 = R1 * R2;
+    gp_Trsf accum3 = R1 * R2 * R3;
+    gp_Trsf accum4 = R1 * R2 * R3 * R4;
+    gp_Trsf accum5 = R1 * R2 * R3 * R4 * R5;
+    gp_Trsf accum6 = R1 * R2 * R3 * R4 * R5 * R6;
+
+    // ========================================================
+    // ✅ 6. APPLY TO STLs (Scale -> Internal Math -> Global Room Spin)
+    // Order matters perfectly: globalRot * accum * baseTrsf
+    // ========================================================
+    if (myRobotLinks.size() > 0) myContext->SetLocation(myRobotLinks[0], TopLoc_Location(globalRot * baseTrsf));
+    if (myRobotLinks.size() > 1) myContext->SetLocation(myRobotLinks[1], TopLoc_Location(globalRot * accum1 * baseTrsf));
+    if (myRobotLinks.size() > 2) myContext->SetLocation(myRobotLinks[2], TopLoc_Location(globalRot * accum2 * baseTrsf));
+    if (myRobotLinks.size() > 3) myContext->SetLocation(myRobotLinks[3], TopLoc_Location(globalRot * accum3 * baseTrsf));
+    if (myRobotLinks.size() > 4) myContext->SetLocation(myRobotLinks[4], TopLoc_Location(globalRot * accum4 * baseTrsf));
+    if (myRobotLinks.size() > 5) myContext->SetLocation(myRobotLinks[5], TopLoc_Location(globalRot * accum5 * baseTrsf));
+
+    // If your STL robot has a 7th piece (the tool flange):
+    if (myRobotLinks.size() > 6) myContext->SetLocation(myRobotLinks[6], TopLoc_Location(globalRot * accum6 * baseTrsf));
+
+    // Force the screen to redraw the new positions instantly
+    myContext->UpdateCurrentViewer();
+}
+
 
 
 void OcctWidget::drawRoomGrid()
@@ -828,3 +902,4 @@ void OcctWidget::drawRoomGrid()
 
     myView->FitAll();
 }
+
