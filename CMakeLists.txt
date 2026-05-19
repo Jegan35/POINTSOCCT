@@ -17,6 +17,7 @@ qt_add_executable(appOCCT
     OcctWidget.h OcctWidget.cpp
 
     MainWindow.h MainWindow.cpp
+    kinematic.h kinematic.cpp
 
 )
 

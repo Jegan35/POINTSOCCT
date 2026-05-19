@@ -13,6 +13,7 @@
 #include <QDebug>
 #include <Graphic3d_MaterialAspect.hxx> // For metallic rendering
 #include <QTimer>
+#include <Graphic3d_HorizontalTextAlignment.hxx>
 
 
 // ==========================================
@@ -53,6 +54,10 @@
 #include <Poly_Triangulation.hxx>
 #include <AIS_Triangulation.hxx>
 #include <TopLoc_Location.hxx>
+#include <AIS_ViewCube.hxx>
+#include <Graphic3d_TransformPers.hxx>
+#include <AIS_TextLabel.hxx>
+#include <TCollection_ExtendedString.hxx>
 
 
 // ✅ ADD THE MISSING GRID HEADERS HERE:
@@ -108,14 +113,42 @@ void OcctWidget::initOCCT()
         wind->Map();
     }
 
-    myView->SetBgGradientColors(Quantity_NOC_BLACK, Quantity_NOC_GRAY30, Aspect_GFM_VER);
+    // ✅ NEW: Bright, professional CAD background so colors pop perfectly!
+    // ✅ RESTORED: Dark CAD background so metallic loaded parts do not wash out!
+    // ✅ NEW: Bright, professional CAD background so colors pop perfectly!
+    myView->SetBgGradientColors(Quantity_NOC_WHITE, Quantity_NOC_GRAY90, Aspect_GFM_VER);// background colour
     myContext = new AIS_InteractiveContext(myViewer);
 
-    // ✅ ADD THESE TWO LINES: Turn on 8x Hardware Anti-Aliasing!
-    // This will make your custom grid lines perfectly smooth and straight.
+    // Hardware Anti-Aliasing for smooth lines
     myView->ChangeRenderingParams().IsAntialiasingEnabled = Standard_True;
     myView->ChangeRenderingParams().NbMsaaSamples = 8;
 
+    // ==========================================
+    // ✅ FIX: ADD THE VIEW CUBE *ONLY* TO THE LEFT WIDGET
+    // ==========================================
+    if (myRole == MainRole) {
+        Handle(AIS_ViewCube) viewCube = new AIS_ViewCube();
+
+        viewCube->SetDrawAxes(Standard_True);
+        viewCube->SetSize(55);
+        viewCube->SetFontHeight(12);
+        viewCube->SetAxesLabels("X", "Y", "Z");
+
+        // ==========================================
+        // ✅ THE FIX: SET ANIMATION DURATION TO ZERO
+        // This stops the camera from getting "stuck" trying to animate!
+        // ==========================================
+        Handle(Graphic3d_TransformPers) trsfPers = new Graphic3d_TransformPers(
+            Graphic3d_TMF_TriedronPers,
+            Aspect_TOTP_RIGHT_UPPER,
+            Graphic3d_Vec2i(85, 85)
+            );
+        viewCube->SetTransformPersistence(trsfPers);
+        myContext->Display(viewCube, Standard_False);
+    }
+    // ==========================================
+
+    // Draw your custom 3-wall grid
     drawRoomGrid();
 }
 
@@ -146,7 +179,7 @@ void OcctWidget::loadStepFile(const std::string& filePath)
 
         // ✅ NEW: Automatically push the part forward by 300mm on the X axis!
         // If your "forward" direction is actually the Y axis, change this to (0.0, 300.0, 0.0)
-        offsetWorkpiece(300.0, 0.0, 0.0);
+        offsetWorkpiece(.0, -800.0, 0.0);
 
         myView->FitAll();
         myView->Redraw();
@@ -181,16 +214,29 @@ void OcctWidget::setSelectionMode(int mode)
 {
     if(myContext.IsNull()) return;
 
-    // ✅ STORE THE MODE so we don't forget it when a new part loads
     myCurrentSelectionMode = mode;
 
+    // 1. Deactivate everything (This accidentally puts the ViewCube to sleep!)
     myContext->Deactivate();
 
+    // 2. Turn on your new Selection rules for the robot parts
     switch(mode) {
     case 1: myContext->Activate(AIS_Shape::SelectionMode(TopAbs_FACE)); break;
     case 2: myContext->Activate(AIS_Shape::SelectionMode(TopAbs_EDGE)); break;
     case 3: myContext->Activate(AIS_Shape::SelectionMode(TopAbs_WIRE)); break;
     default: myContext->Activate(0);
+    }
+
+    // ==========================================
+    // ✅ THE FIX: WAKE THE VIEW CUBE BACK UP!
+    // ==========================================
+    // We search the screen for the ViewCube and force its interactivity back on.
+    AIS_ListOfInteractive displayedObjects;
+    myContext->DisplayedObjects(displayedObjects);
+    for (const Handle(AIS_InteractiveObject)& obj : displayedObjects) {
+        if (obj->DynamicType() == STANDARD_TYPE(AIS_ViewCube)) {
+            myContext->Activate(obj, 0); // 0 is the default click mode
+        }
     }
 }
 void OcctWidget::enableOriginSelectionMode()
@@ -400,15 +446,13 @@ void OcctWidget::resizeEvent(QResizeEvent *)
 {
     if (!myView.IsNull()) myView->MustBeResized();
 }
-
 void OcctWidget::mousePressEvent(QMouseEvent *event)
 {
     myLastMousePos = event->pos();
+    int x = event->pos().x() * devicePixelRatio();
+    int y = event->pos().y() * devicePixelRatio();
 
     if (event->button() == Qt::LeftButton) {
-        int x = event->pos().x() * devicePixelRatio();
-        int y = event->pos().y() * devicePixelRatio();
-
         myContext->MoveTo(x, y, myView, Standard_True);
 
         if (event->modifiers() & Qt::ShiftModifier) {
@@ -419,9 +463,17 @@ void OcctWidget::mousePressEvent(QMouseEvent *event)
 
         myView->Redraw();
         myContext->InitSelected();
-
         if (myContext->HasSelectedShape()) {
+
+            // ✅ THE SHIELD: If we clicked the ViewCube, STOP here and let it move the camera!
+            Handle(AIS_InteractiveObject) selObj = myContext->SelectedInteractive();
+            if (!selObj.IsNull() && selObj->DynamicType() == STANDARD_TYPE(AIS_ViewCube)) {
+                myContext->ClearSelected(Standard_False);
+                return;
+            }
+
             if (myIsSettingOriginMode) {
+                // ... (Keep all your existing origin setup logic below here) ...
                 // (Keep your existing origin setup logic here...)
                 TopoDS_Shape selectedShape = myContext->SelectedShape();
                 Bnd_Box boundingBox;
@@ -464,7 +516,14 @@ void OcctWidget::mousePressEvent(QMouseEvent *event)
             }
         }
     }
+    // ==========================================
+    // ✅ NEW FIX: Tell the camera to start rotating!
+    // ==========================================
+    else if (event->button() == Qt::RightButton) {
+        myView->StartRotation(x, y);
+    }
 }
+
 
 void OcctWidget::mouseMoveEvent(QMouseEvent *event)
 {
@@ -486,65 +545,6 @@ void OcctWidget::mouseMoveEvent(QMouseEvent *event)
 void OcctWidget::wheelEvent(QWheelEvent *event)
 {
     myView->Zoom(0, 0, event->angleDelta().y() / 10, 0);
-}
-
-void OcctWidget::drawRoomGrid()
-{
-    // Defined boundaries
-    double minX = -2000.0, maxX = 2000.0;
-    double minY = -2000.0, maxY = 2000.0;
-    double minZ = 0.0, maxZ = 3000.0;
-    double step = 100.0;
-
-    TopoDS_Compound floorComp, backWallComp, leftWallComp;
-    BRep_Builder builder;
-    builder.MakeCompound(floorComp);
-    builder.MakeCompound(backWallComp);
-    builder.MakeCompound(leftWallComp);
-
-    // 1. FLOOR GRID (XY Plane)
-    for (double x = minX; x <= maxX; x += step)
-        builder.Add(floorComp, BRepBuilderAPI_MakeEdge(gp_Pnt(x, minY, minZ), gp_Pnt(x, maxY, minZ)));
-    for (double y = minY; y <= maxY; y += step)
-        builder.Add(floorComp, BRepBuilderAPI_MakeEdge(gp_Pnt(minX, y, minZ), gp_Pnt(maxX, y, minZ)));
-
-    // 2. BACK WALL GRID (XZ Plane)
-    for (double x = minX; x <= maxX; x += step)
-        builder.Add(backWallComp, BRepBuilderAPI_MakeEdge(gp_Pnt(x, maxY, minZ), gp_Pnt(x, maxY, maxZ)));
-    for (double z = minZ; z <= maxZ; z += step)
-        builder.Add(backWallComp, BRepBuilderAPI_MakeEdge(gp_Pnt(minX, maxY, z), gp_Pnt(maxX, maxY, z)));
-
-    // 3. LEFT WALL GRID (YZ Plane)
-    for (double y = minY; y <= maxY; y += step)
-        builder.Add(leftWallComp, BRepBuilderAPI_MakeEdge(gp_Pnt(minX, y, minZ), gp_Pnt(minX, y, maxZ)));
-    for (double z = minZ; z <= maxZ; z += step)
-        builder.Add(leftWallComp, BRepBuilderAPI_MakeEdge(gp_Pnt(minX, minY, z), gp_Pnt(minX, maxY, z)));
-
-    // Convert into 3 separate display shapes
-    Handle(AIS_Shape) aisFloor = new AIS_Shape(floorComp);
-    Handle(AIS_Shape) aisBack = new AIS_Shape(backWallComp);
-    Handle(AIS_Shape) aisLeft = new AIS_Shape(leftWallComp);
-
-    // ✅ APPLY THE 3 DIFFERENT COLORS
-    myContext->SetColor(aisFloor, Quantity_NOC_GRAY50, Standard_False);     // Grey
-    myContext->SetColor(aisBack, Quantity_NOC_STEELBLUE, Standard_False);   // Blue
-    myContext->SetColor(aisLeft, Quantity_NOC_SEAGREEN, Standard_False);    // Green
-
-    // Display and make them un-clickable
-    myContext->Display(aisFloor, Standard_False);
-    myContext->Display(aisBack, Standard_False);
-    myContext->Display(aisLeft, Standard_False);
-    myContext->Deactivate(aisFloor);
-    myContext->Deactivate(aisBack);
-    myContext->Deactivate(aisLeft);
-
-    // Center Red Dot
-    Handle(AIS_Shape) centerDot = new AIS_Shape(BRepPrimAPI_MakeSphere(gp_Pnt(0,0,0), 15.0).Shape());
-    myContext->SetColor(centerDot, Quantity_NOC_RED, Standard_False);
-    myContext->Display(centerDot, Standard_False);
-    myContext->Deactivate(centerDot);
-
-    myView->FitAll();
 }
 
 
@@ -594,14 +594,6 @@ void OcctWidget::offsetWorkpiece(double dx, double dy, double dz)
 
     emit statusUpdate(QString("📏 Part Calibrated to Robot Base -> X:%1, Y:%2, Z:%3").arg(dx).arg(dy).arg(dz));
 }
-
-
-
-
-
-
-
-
 
 
 
@@ -705,4 +697,134 @@ void OcctWidget::loadNextRobotLink()
     }
 
     QTimer::singleShot(50, this, &OcctWidget::loadNextRobotLink);
+}
+
+
+void OcctWidget::drawRoomGrid()
+{
+    // Defined boundaries
+    double minX = -2000.0, maxX = 2000.0;
+    double minY = -2000.0, maxY = 2000.0;
+    double minZ = 0.0, maxZ = 2000.0;
+    double step = 100.0;
+
+    TopoDS_Compound floorComp, backWallComp, leftWallComp;
+    BRep_Builder builder;
+    builder.MakeCompound(floorComp);
+    builder.MakeCompound(backWallComp);
+    builder.MakeCompound(leftWallComp);
+
+    for (double x = minX; x <= maxX; x += step)
+        builder.Add(floorComp, BRepBuilderAPI_MakeEdge(gp_Pnt(x, minY, minZ), gp_Pnt(x, maxY, minZ)));
+    for (double y = minY; y <= maxY; y += step)
+        builder.Add(floorComp, BRepBuilderAPI_MakeEdge(gp_Pnt(minX, y, minZ), gp_Pnt(maxX, y, minZ)));
+
+    for (double x = minX; x <= maxX; x += step)
+        builder.Add(backWallComp, BRepBuilderAPI_MakeEdge(gp_Pnt(x, maxY, minZ), gp_Pnt(x, maxY, maxZ)));
+    for (double z = minZ; z <= maxZ; z += step)
+        builder.Add(backWallComp, BRepBuilderAPI_MakeEdge(gp_Pnt(minX, maxY, z), gp_Pnt(maxX, maxY, z)));
+
+    for (double y = minY; y <= maxY; y += step)
+        builder.Add(leftWallComp, BRepBuilderAPI_MakeEdge(gp_Pnt(minX, y, minZ), gp_Pnt(minX, y, maxZ)));
+    for (double z = minZ; z <= maxZ; z += step)
+        builder.Add(leftWallComp, BRepBuilderAPI_MakeEdge(gp_Pnt(minX, minY, z), gp_Pnt(minX, maxY, z)));
+
+    Handle(AIS_Shape) aisFloor = new AIS_Shape(floorComp);
+    Handle(AIS_Shape) aisBack = new AIS_Shape(backWallComp);
+    Handle(AIS_Shape) aisLeft = new AIS_Shape(leftWallComp);
+
+    // ==========================================
+    // ✅ LIGHT RED FLOOR (Perfect contrast for labels)
+    // ==========================================
+    Quantity_Color lightRedFloor(Quantity_NOC_INDIANRED1);
+    myContext->SetColor(aisFloor, lightRedFloor, Standard_False);
+    myContext->SetColor(aisBack, Quantity_NOC_STEELBLUE, Standard_False);
+    myContext->SetColor(aisLeft, Quantity_NOC_SEAGREEN, Standard_False);
+
+    myContext->Display(aisFloor, Standard_False);
+    myContext->Display(aisBack, Standard_False);
+    myContext->Display(aisLeft, Standard_False);
+    myContext->Deactivate(aisFloor);
+    myContext->Deactivate(aisBack);
+    myContext->Deactivate(aisLeft);
+
+    // ==========================================
+    // ✅ TRUE 3D AXIS LABELS (Physical Size: 80mm)
+    // ==========================================
+    int textSize = 60;
+
+    // RED LABELS (X-Axis)
+    for (int x = -2000; x <= 2000; x += 100) {
+        if (x == 0) continue;
+        Handle(AIS_TextLabel) xLabel = new AIS_TextLabel();
+        xLabel->SetText(TCollection_ExtendedString(x));
+        xLabel->SetPosition(gp_Pnt(x, minY - 50.0, 0));
+        xLabel->SetHeight(textSize);
+        xLabel->SetColor(Quantity_NOC_RED);
+        xLabel->SetZoomable(Standard_True); // True 3D object!
+        myContext->Display(xLabel, Standard_False);
+        myContext->Deactivate(xLabel);
+    }
+
+    // GREEN LABELS (Y-Axis)
+    for (int y = -2000; y <= 2000; y += 100) {
+        if (y == 0) continue;
+        Handle(AIS_TextLabel) yLabel = new AIS_TextLabel();
+        yLabel->SetText(TCollection_ExtendedString(y));
+        yLabel->SetPosition(gp_Pnt(maxX + 50.0, y, 0));
+        yLabel->SetHeight(textSize);
+        yLabel->SetColor(Quantity_NOC_GREEN);
+        yLabel->SetZoomable(Standard_True);
+        myContext->Display(yLabel, Standard_False);
+        myContext->Deactivate(yLabel);
+    }
+
+    // BLUE LABELS (Z-Axis)
+    for (int z = 100; z <= 2000; z += 100) {
+        Handle(AIS_TextLabel) zLabel = new AIS_TextLabel();
+        zLabel->SetText(TCollection_ExtendedString(z));
+        zLabel->SetPosition(gp_Pnt(maxX + 50.0, maxY, z));
+        zLabel->SetHeight(textSize);
+        zLabel->SetColor(Quantity_NOC_BLUE1);
+        zLabel->SetZoomable(Standard_True);
+        myContext->Display(zLabel, Standard_False);
+        myContext->Deactivate(zLabel);
+    }
+
+    // ==========================================
+    // ✅ PERFECT SMALL POSTER LOGO
+    // ==========================================
+    Handle(AIS_TextLabel) titleLabel = new AIS_TextLabel();
+    titleLabel->SetText(TCollection_ExtendedString("TEXSONICS"));
+
+    // Perfectly centered at X = 0.0
+    titleLabel->SetPosition(gp_Pnt(0.0, maxY - 1.0, 1100));
+    titleLabel->SetHeight(60); // <--- Shrunk down to a clean, professional poster size
+    titleLabel->SetColor(Quantity_NOC_BLACK);
+    titleLabel->SetZoomable(Standard_True);
+    titleLabel->SetOrientation3D(gp_Ax2(gp_Pnt(0.0, maxY, 1200), gp_Dir(0, -1, 0), gp_Dir(1, 0, 0)));
+    titleLabel->SetHJustification(Graphic3d_HTA_CENTER);
+    myContext->Display(titleLabel, Standard_False);
+    myContext->Deactivate(titleLabel);
+
+    Handle(AIS_TextLabel) subLabel = new AIS_TextLabel();
+    subLabel->SetText(TCollection_ExtendedString("R O B O T I C S"));
+
+    subLabel->SetPosition(gp_Pnt(0.0, maxY - 1.0, 900));
+    subLabel->SetHeight(30); // <--- Small subtitle size
+    subLabel->SetColor(Quantity_NOC_BLACK);
+    subLabel->SetZoomable(Standard_True);
+    subLabel->SetOrientation3D(gp_Ax2(gp_Pnt(0.0, maxY, 900), gp_Dir(0, -1, 0), gp_Dir(1, 0, 0)));
+    subLabel->SetHJustification(Graphic3d_HTA_CENTER);
+    myContext->Display(subLabel, Standard_False);
+    myContext->Deactivate(subLabel);
+
+    // Center Trihedron (The origin arrows)
+    Handle(Geom_Axis2Placement) axis = new Geom_Axis2Placement(gp::XOY());
+    Handle(AIS_Trihedron) trihedron = new AIS_Trihedron(axis);
+    trihedron->SetSize(150);
+    myContext->Display(trihedron, Standard_False);
+    myContext->Deactivate(trihedron);
+
+    myView->FitAll();
 }
