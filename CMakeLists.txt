@@ -19,9 +19,12 @@ qt_add_executable(appOCCT
     OcctWidget.h OcctWidget.cpp
 
     MainWindow.h MainWindow.cpp
-    kinematic.h kinematic.cpp
+
     LeftPanel.h LeftPanel.cpp
     RightPanel.h RightPanel.cpp
+    RightHeader.cpp RightHeader.h
+    RightHeader.h RightHeader.cpp
+    MenuTray.h MenuTray.cpp
 
 )
 

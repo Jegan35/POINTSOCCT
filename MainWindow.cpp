@@ -14,7 +14,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     // 3. Add to splitter
     mainSplitter->addWidget(leftPanel);
     mainSplitter->addWidget(rightPanel);
-
+    connect(rightPanel, &RightPanel::swipeLockToggled, leftPanel, &LeftPanel::setSwipeEnabled);
+    connect(rightPanel, &RightPanel::requestFooterSwipe, leftPanel, &LeftPanel::toggleFooterSwipe);
     // 4. Force an exact 50/50 split
     mainSplitter->setSizes(QList<int>({INT_MAX, INT_MAX}));
 
