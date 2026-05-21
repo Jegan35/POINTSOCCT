@@ -20,6 +20,8 @@ qt_add_executable(appOCCT
 
     MainWindow.h MainWindow.cpp
     kinematic.h kinematic.cpp
+    LeftPanel.h LeftPanel.cpp
+    RightPanel.h RightPanel.cpp
 
 )
 
@@ -31,6 +33,19 @@ target_link_libraries(appOCCT
     TKernel TKMath TKG2d TKG3d TKGeomBase TKGeomAlgo TKBRep TKTopAlgo
     TKMesh TKService TKOpenGl TKV3d TKXSBase TKSTEP TKSTEPBase TKSTEPAttr
     TKIGES TKShHealing TKSTL orocos-kdl
+)
+set(PROJECT_SOURCES
+    main.cpp
+    MainWindow.cpp
+    MainWindow.h
+    LeftPanel.cpp
+    LeftPanel.h
+    RightPanel.cpp
+    RightPanel.h
+    OcctWidget.cpp
+    OcctWidget.h
+    kinematic.cpp
+    kinematic.h
 )
 
 target_include_directories(appOCCT PRIVATE ${OpenCASCADE_INCLUDE_DIR})

@@ -615,17 +615,18 @@ void OcctWidget::loadDefaultRobot()
     QTimer::singleShot(50, this, &OcctWidget::loadNextRobotLink);
 }
 
-// ==========================================
-// 🚀 LIGHTNING-FAST RAW MESH STL LOADER
-// ==========================================
 void OcctWidget::loadNextRobotLink()
 {
     // 1. Check if we are finished loading all 6 parts
     if (myCurrentLoadIndex > 5) {
+
+        // ✅ THE FIX: Force the math update ONE LAST TIME so the final link snaps into place!
+        updateRobotPosture(0, 0, 0, 0, 0, 0);
+
         myView->FitAll();
         myContext->UpdateCurrentViewer();
 
-        // Apply the selection mode (This will now ONLY apply to the STEP workpiece!)
+        // Apply the selection mode
         setSelectionMode(myCurrentSelectionMode);
 
         emit statusUpdate("✅ Successfully loaded 6 STL robot links instantly. Robot is visual only.");
@@ -645,49 +646,31 @@ void OcctWidget::loadNextRobotLink()
     }
 
     std::string stdFile = fileName.toStdString();
-
-    // ==========================================
-    // 🚀 THE FIX: READ RAW MESH (NO MATH CONVERSION)
-    // ==========================================
     Handle(Poly_Triangulation) mesh = RWStl::ReadFile(stdFile.c_str());
 
     if (!mesh.IsNull()) {
-        // Wrap the raw mesh into a displayable object
-        // Wrap the raw mesh into a displayable object
         Handle(AIS_Triangulation) aisShape = new AIS_Triangulation(mesh);
 
-        // ✅ CRITICAL FIX: DO NOT apply scaling or rotation during load!
-        // Just force it to true absolute zero.
-        // Our updateRobotPosture() function will handle ALL scaling and math.
         gp_Trsf zeroTrsf;
         myContext->SetLocation(aisShape, TopLoc_Location(zeroTrsf));
 
-        // Apply Industrial Colors
         Quantity_Color partColor;
         if (myCurrentLoadIndex == 0) partColor = Quantity_NOC_GRAY30;
         else if (myCurrentLoadIndex == 5) partColor = Quantity_NOC_GRAY75;
         else partColor = Quantity_Color(1.0, 0.4, 0.0, Quantity_TOC_RGB);
 
         myContext->SetColor(aisShape, partColor, Standard_False);
-
         myContext->Display(aisShape, Standard_False);
         myRobotLinks.push_back(aisShape);
-        // ✅ THE GHOST TRICK: DEACTIVATE SELECTION
         myContext->Deactivate(aisShape);
-
         myView->Redraw();
-    } else {
-        qDebug() << "❌ Failed to read raw STL mesh:" << fileName;
     }
 
     // 3. Increment the tracker to the next part
     myCurrentLoadIndex++;
 
-    // 4. Update the UI text and trigger the next loop
-    if (myCurrentLoadIndex <= 5) {
-        updateRobotPosture(0, 0, 0, 0, 0, 0);
-        emit statusUpdate(QString("⏳ Loading Raw Mesh (link%1.stl)...").arg(myCurrentLoadIndex));
-    }
+    // 4. Update the UI text (Removed the broken updateRobotPosture call from here)
+    emit statusUpdate(QString("⏳ Loading Raw Mesh (link%1.stl)...").arg(myCurrentLoadIndex - 1));
 
     QTimer::singleShot(50, this, &OcctWidget::loadNextRobotLink);
 }
