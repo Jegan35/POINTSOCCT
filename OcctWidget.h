@@ -11,10 +11,14 @@
 #include <BRepAdaptor_CompCurve.hxx>
 #include <GCPnts_UniformAbscissa.hxx>
 #include <BRep_Tool.hxx>
-
+#include <AIS_ColoredShape.hxx>
+#include <BRepPrimAPI_MakeCylinder.hxx>
+#include <BRepPrimAPI_MakeCone.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Wire.hxx>
 #include <TopoDS_Face.hxx>
+#include <BRepMesh_IncrementalMesh.hxx>
+#include <Prs3d_Drawer.hxx>
 
 #include <AIS_Trihedron.hxx>
 #include <Geom_Axis2Placement.hxx>
@@ -45,6 +49,7 @@ public:
 
     // Defines whether this widget acts as the Main Left screen or the Isolated Right screen
     enum ViewRole { MainRole, SideRole };
+    void clearMarks();
     void setViewRole(ViewRole role) { myRole = role; }
 
     void loadStepFile(const std::string& filePath);
@@ -82,6 +87,11 @@ protected:
 
 
 private:
+    std::vector<gp_Pnt> myTrajectoryPoints;
+    Handle(AIS_Shape) myTrajectoryShape;
+    Handle(AIS_ColoredShape) myBaseTriad;
+    Handle(AIS_ColoredShape) myTipTriad;
+    Handle(AIS_ColoredShape) createThickTriad(double scale);
     int myCurrentLoadIndex = -1;
     void loadNextRobotLink();
     ViewRole myRole = MainRole;

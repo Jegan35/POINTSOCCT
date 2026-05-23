@@ -1,100 +1,258 @@
 #include "MenuTray.h"
+#include "ClientBackend.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QLabel>
 #include <QFrame>
-#include <QButtonGroup>
 
-MenuTray::MenuTray(QWidget *parent) : QWidget(parent)
+// ─────────────────────────────────────────────────────────────────────────────
+//  DESIGN SYSTEM  –  shared with LeftPanel (duplicated here for independence)
+// ─────────────────────────────────────────────────────────────────────────────
+namespace MTray {
+
+static const char* PANEL_BG     = "#0D0F14";
+static const char* SURFACE_1    = "#141820";
+static const char* BORDER_DIM   = "#252C3E";
+static const char* BORDER_MID   = "#3A4460";
+
+// Re-usable raised-button generator (identical logic to LeftPanel DS namespace)
+static QString raisedBtn(const QString& topColor,
+                         const QString& rimColor,
+                         const QString& glowColor = "#FFFFFF18")
+{
+    return QString(
+               "QPushButton {"
+               "  background-color: %1;"
+               "  border-top: 1px solid %3;"
+               "  border-left: 1px solid %3;"
+               "  border-right: 1px solid %2;"
+               "  border-bottom: 4px solid %2;"
+               "  color: #E8EDF5;"
+               "  font-family: 'Rajdhani','Consolas',monospace;"
+               "  font-weight: 700; font-size: 14px; letter-spacing: 1.2px;"
+               "  padding: 12px; border-radius: 5px;"
+               "}"
+               "QPushButton:hover   { filter: brightness(1.1); }"
+               "QPushButton:pressed { border-bottom: 1px solid %2; border-top: 4px solid %2; margin-top: 3px; }"
+               "QPushButton:checked { border: 2px solid #FFFFFF55; }"
+               ).arg(topColor, rimColor, glowColor);
+}
+
+// Sub-button (smaller, for Cartesian / Joints row)
+static QString subBtn() {
+    return
+        "QPushButton {"
+        "  background-color: #1C2130;"
+        "  color: #8A9AB8;"
+        "  font-family: 'Rajdhani','Consolas',monospace;"
+        "  font-weight: 700; font-size: 12px; letter-spacing: 0.8px;"
+        "  padding: 9px 6px; border-radius: 4px;"
+        "  border: 1px solid #3A4460; border-bottom: 3px solid #0D0F14;"
+        "}"
+        "QPushButton:checked { background-color: #003A55; color: #00D4FF; border: 1px solid #007A99; border-bottom: 3px solid #003040; }"
+        "QPushButton:hover { background-color: #252C3E; }";
+}
+
+// Divider line
+inline void addDivider(QVBoxLayout *layout, QWidget *parent) {
+    QFrame *line = new QFrame(parent);
+    line->setFrameShape(QFrame::HLine);
+    line->setStyleSheet("background-color: #252C3E; max-height: 1px; border: none; margin: 6px 0;");
+    layout->addWidget(line);
+}
+
+} // namespace MTray
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  MenuTray constructor
+// ─────────────────────────────────────────────────────────────────────────────
+MenuTray::MenuTray(ClientBackend *backend, QWidget *parent)
+    : QWidget(parent), m_backend(backend)
 {
     setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet("MenuTray { background-color: #1E1E24; border-left: 2px solid #3E3E42; }");
+
+    // Chrome: very dark panel with a bright left accent stripe
+    setStyleSheet(
+        "MenuTray {"
+        "  background-color: #0D0F14;"
+        "  border-left: 2px solid #007A99;"
+        "}");
 
     QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setAlignment(Qt::AlignTop); // ✅ FIX: Forces everything to the top!
-    layout->setContentsMargins(20, 25, 20, 25);
-    layout->setSpacing(8);
+    layout->setAlignment(Qt::AlignTop);
+    layout->setContentsMargins(14, 20, 14, 20);
+    layout->setSpacing(6);
 
+    // ── Header ───────────────────────────────────────────────────
     QLabel *lblHeader = new QLabel("≡  MENUS", this);
-    lblHeader->setStyleSheet("color: #FFFFFF; font-weight: bold; font-size: 15px; border: none; padding-left: 5px;");
+    lblHeader->setStyleSheet(
+        "color: #00D4FF;"
+        "font-family: 'Rajdhani','Consolas',monospace;"
+        "font-weight: 800; font-size: 14px; letter-spacing: 2px;"
+        "border: none; padding-left: 4px;");
     layout->addWidget(lblHeader);
 
-    QFrame *hLine = new QFrame(this);
-    hLine->setFrameShape(QFrame::HLine);
-    hLine->setStyleSheet("background-color: #3E3E42; max-height: 1px; border: none; margin-bottom: 10px;");
-    layout->addWidget(hLine);
+    MTray::addDivider(layout, this);
 
-    QString baseBtn = "QPushButton { color: white; font-weight: bold; font-size: 15px; padding: 12px; border-radius: 6px; border: 2px solid transparent; } "
-                      "QPushButton:checked { border: 2px solid white; } ";
-
-    QString subBtnStyle = "QPushButton { background-color: #5B7282; color: white; font-weight: bold; padding: 10px; border-radius: 4px; } "
-                          "QPushButton:checked { background-color: #0EA5E9; }";
-
-    QPushButton *btnSpeed = new QPushButton("SPEED", this); btnSpeed->setStyleSheet(baseBtn + "QPushButton { background-color: #475569; }");
+    // ── SPEED ────────────────────────────────────────────────────
+    QPushButton *btnSpeed = new QPushButton("◈  SPEED", this);
+    // Vibrant Sky Blue
+    btnSpeed->setStyleSheet(MTray::raisedBtn("#0EA5E9", "#0369A1"));
     layout->addWidget(btnSpeed);
 
-    QPushButton *btnJog = new QPushButton("JOG ▾", this); btnJog->setStyleSheet(baseBtn + "QPushButton { background-color: #0284C7; }");
+    MTray::addDivider(layout, this);
+
+    // ── JOG ─────────────────────────────────────────────────────
+    QPushButton *btnJog = new QPushButton("JOG  ▾", this);
+    // Vibrant Amber / Orange
+    btnJog->setStyleSheet(MTray::raisedBtn("#F59E0B", "#B45309"));
     layout->addWidget(btnJog);
 
     jogSubMenu = new QWidget(this);
+    jogSubMenu->setStyleSheet("background: transparent;");
     QHBoxLayout *jogSubLayout = new QHBoxLayout(jogSubMenu);
-    jogSubLayout->setContentsMargins(10, 0, 10, 5);
-    QPushButton *btnJogCart = new QPushButton("CARTESIAN", jogSubMenu); btnJogCart->setCheckable(true); btnJogCart->setStyleSheet(subBtnStyle);
-    QPushButton *btnJogJnt = new QPushButton("JOINTS", jogSubMenu); btnJogJnt->setCheckable(true); btnJogJnt->setStyleSheet(subBtnStyle);
-    jogSubLayout->addWidget(btnJogCart); jogSubLayout->addWidget(btnJogJnt);
+    jogSubLayout->setContentsMargins(6, 2, 6, 4);
+    jogSubLayout->setSpacing(4);
+
+    // Colored Sub-buttons for JOG (Highlights Amber when checked)
+    QString jogSubStyle =
+        "QPushButton { background-color: #334155; color: white; font-weight: bold; border-radius: 4px; padding: 6px; border: 1px solid #475569; }"
+        "QPushButton:hover { background-color: #475569; }"
+        "QPushButton:checked { background-color: #F59E0B; color: black; border: 1px solid #B45309; }";
+
+    QPushButton *btnJogCart = new QPushButton("CARTESIAN", jogSubMenu);
+    btnJogCart->setCheckable(true);
+    btnJogCart->setStyleSheet(jogSubStyle);
+
+    QPushButton *btnJogJnt  = new QPushButton("JOINTS",    jogSubMenu);
+    btnJogJnt->setCheckable(true);
+    btnJogJnt->setStyleSheet(jogSubStyle);
+
+    jogSubLayout->addWidget(btnJogCart);
+    jogSubLayout->addWidget(btnJogJnt);
     jogSubMenu->setVisible(false);
     layout->addWidget(jogSubMenu);
 
-    QPushButton *btnMove = new QPushButton("MOVE ▾", this); btnMove->setStyleSheet(baseBtn + "QPushButton { background-color: #16A34A; }");
+    // ── MOVE ─────────────────────────────────────────────────────
+    QPushButton *btnMove = new QPushButton("MOVE  ▾", this);
+    // Vibrant Emerald Green
+    btnMove->setStyleSheet(MTray::raisedBtn("#10B981", "#047857"));
     layout->addWidget(btnMove);
 
     moveSubMenu = new QWidget(this);
+    moveSubMenu->setStyleSheet("background: transparent;");
     QHBoxLayout *moveSubLayout = new QHBoxLayout(moveSubMenu);
-    moveSubLayout->setContentsMargins(10, 0, 10, 5);
-    QPushButton *btnMoveCart = new QPushButton("CARTESIAN", moveSubMenu); btnMoveCart->setCheckable(true); btnMoveCart->setStyleSheet(subBtnStyle);
-    QPushButton *btnMoveJnt = new QPushButton("JOINTS", moveSubMenu); btnMoveJnt->setCheckable(true); btnMoveJnt->setStyleSheet(subBtnStyle);
-    moveSubLayout->addWidget(btnMoveCart); moveSubLayout->addWidget(btnMoveJnt);
+    moveSubLayout->setContentsMargins(6, 2, 6, 4);
+    moveSubLayout->setSpacing(4);
+
+    // Colored Sub-buttons for MOVE (Highlights Green when checked)
+    QString moveSubStyle =
+        "QPushButton { background-color: #334155; color: white; font-weight: bold; border-radius: 4px; padding: 6px; border: 1px solid #475569; }"
+        "QPushButton:hover { background-color: #475569; }"
+        "QPushButton:checked { background-color: #10B981; color: black; border: 1px solid #047857; }";
+
+    QPushButton *btnMoveCart = new QPushButton("CARTESIAN", moveSubMenu);
+    btnMoveCart->setCheckable(true);
+    btnMoveCart->setStyleSheet(moveSubStyle);
+
+    QPushButton *btnMoveJnt  = new QPushButton("JOINTS",    moveSubMenu);
+    btnMoveJnt->setCheckable(true);
+    btnMoveJnt->setStyleSheet(moveSubStyle);
+
+    moveSubLayout->addWidget(btnMoveCart);
+    moveSubLayout->addWidget(btnMoveJnt);
     moveSubMenu->setVisible(false);
     layout->addWidget(moveSubMenu);
 
-    QPushButton *btnManual = new QPushButton("MANUAL", this); btnManual->setStyleSheet(baseBtn + "QPushButton { background-color: #4F46E5; }");
+    MTray::addDivider(layout, this);
+
+    // ── Operating modes ───────────────────────────────────────────
+    // ── Button Palette Strategy ──────────────────────────────────
+    // Manual: Light Indigo/Blue
+    QPushButton *btnManual = new QPushButton("⊙  MANUAL", this);
+    btnManual->setStyleSheet(MTray::raisedBtn("#6366F1", "#4338CA"));
     layout->addWidget(btnManual);
 
-    QPushButton *btnRemote = new QPushButton("REMOTE", this); btnRemote->setStyleSheet(baseBtn + "QPushButton { background-color: #0F766E; }");
+    // Remote: Vibrant Teal/Green
+    QPushButton *btnRemote = new QPushButton("⊕  REMOTE", this);
+    btnRemote->setStyleSheet(MTray::raisedBtn("#14B8A6", "#0D9488"));
     layout->addWidget(btnRemote);
 
-    QPushButton *btnAuto = new QPushButton("AUTO", this); btnAuto->setStyleSheet(baseBtn + "QPushButton { background-color: #7C3AED; }");
+    // Auto: Bright Violet/Purple
+    QPushButton *btnAuto = new QPushButton("▶  AUTO", this);
+    btnAuto->setStyleSheet(MTray::raisedBtn("#A855F7", "#9333EA"));
     layout->addWidget(btnAuto);
 
-    layout->addStretch(); // Pushes the close button to the absolute bottom
+    layout->addStretch();
+    MTray::addDivider(layout, this);
 
-    QPushButton *btnClose = new QPushButton("CLOSE", this); btnClose->setStyleSheet(baseBtn + "QPushButton { background-color: #DC2626; }");
+    // Close: Vibrant Red/Coral
+    QPushButton *btnClose = new QPushButton("✕  CLOSE", this);
+    btnClose->setStyleSheet(MTray::raisedBtn("#EF4444", "#DC2626"));
     layout->addWidget(btnClose);
-
+    // ── Animation ─────────────────────────────────────────────────
     slideAnimation = new QPropertyAnimation(this, "geometry");
-    slideAnimation->setDuration(200);
+    slideAnimation->setDuration(220);
     slideAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
-    // Routing
-    connect(btnJog, &QPushButton::clicked, [this]() { jogSubMenu->setVisible(!jogSubMenu->isVisible()); moveSubMenu->setVisible(false); });
-    connect(btnMove, &QPushButton::clicked, [this]() { moveSubMenu->setVisible(!moveSubMenu->isVisible()); jogSubMenu->setVisible(false); });
-    connect(btnClose, &QPushButton::clicked, [this]() { toggleTray(parentWidget()->width(), parentWidget()->height()); });
+    // ── Signal wiring ─────────────────────────────────────────────
+    connect(btnJog, &QPushButton::clicked, [this]() {
+        jogSubMenu->setVisible(!jogSubMenu->isVisible());
+        moveSubMenu->setVisible(false);
+    });
+    connect(btnMove, &QPushButton::clicked, [this]() {
+        moveSubMenu->setVisible(!moveSubMenu->isVisible());
+        jogSubMenu->setVisible(false);
+    });
+    connect(btnClose, &QPushButton::clicked, [this]() {
+        if (parentWidget()) toggleTray(parentWidget()->width(), parentWidget()->height());
+    });
 
     connect(btnSpeed, &QPushButton::clicked, [this]() { emit modeSelected("SPEED"); });
-    connect(btnAuto, &QPushButton::clicked, [this]() { emit modeSelected("AUTO"); });
-    connect(btnManual, &QPushButton::clicked, [this]() { emit modeSelected("MANUAL"); });
-    connect(btnRemote, &QPushButton::clicked, [this]() { emit modeSelected("REMOTE"); });
 
-    connect(btnJogCart, &QPushButton::clicked, [this, btnJogJnt]() { btnJogJnt->setChecked(false); emit modeSelected("JOG_CART"); });
-    connect(btnJogJnt, &QPushButton::clicked, [this, btnJogCart]() { btnJogCart->setChecked(false); emit modeSelected("JOG_JNT"); });
-    connect(btnMoveCart, &QPushButton::clicked, [this, btnMoveJnt]() { btnMoveJnt->setChecked(false); emit modeSelected("MOVE_CART"); });
-    connect(btnMoveJnt, &QPushButton::clicked, [this, btnMoveCart]() { btnMoveCart->setChecked(false); emit modeSelected("MOVE_JNT"); });
+    connect(btnAuto, &QPushButton::clicked, [this]() {
+        if (m_backend) m_backend->setAutoMode();
+        emit modeSelected("AUTO");
+    });
+    connect(btnManual, &QPushButton::clicked, [this]() {
+        if (m_backend) m_backend->setManualMode();
+        emit modeSelected("MANUAL");
+    });
+    connect(btnRemote, &QPushButton::clicked, [this]() {
+        if (m_backend) m_backend->setRemoteMode();
+        emit modeSelected("REMOTE");
+    });
+
+    connect(btnJogCart, &QPushButton::clicked, [this, btnJogJnt]() {
+        btnJogJnt->setChecked(false);
+        if (m_backend) m_backend->setJogMode();
+        emit modeSelected("JOG_CART");
+    });
+    connect(btnJogJnt, &QPushButton::clicked, [this, btnJogCart]() {
+        btnJogCart->setChecked(false);
+        if (m_backend) m_backend->setJogMode();
+        emit modeSelected("JOG_JNT");
+    });
+    connect(btnMoveCart, &QPushButton::clicked, [this, btnMoveJnt]() {
+        btnMoveJnt->setChecked(false);
+        if (m_backend) m_backend->setMoveMode();
+        emit modeSelected("MOVE_CART");
+    });
+    connect(btnMoveJnt, &QPushButton::clicked, [this, btnMoveCart]() {
+        btnMoveCart->setChecked(false);
+        if (m_backend) m_backend->setMoveMode();
+        emit modeSelected("MOVE_JNT");
+    });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  toggleTray
+// ─────────────────────────────────────────────────────────────────────────────
 void MenuTray::toggleTray(int parentWidth, int parentHeight)
 {
-    int trayWidth = 280;
+    const int trayWidth = 260;
     if (!isOpen) {
         setGeometry(parentWidth, 0, trayWidth, parentHeight);
         show(); raise();

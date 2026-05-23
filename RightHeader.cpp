@@ -1,7 +1,10 @@
 #include "RightHeader.h"
+#include "ClientBackend.h"
 #include <QHBoxLayout>
 
-RightHeader::RightHeader(QWidget *parent) : QWidget(parent)
+// ✅ Constructor now accepts the backend pointer
+RightHeader::RightHeader(ClientBackend *backend, QWidget *parent)
+    : QWidget(parent), m_backend(backend)
 {
     QHBoxLayout *layout = new QHBoxLayout(this);
     layout->setContentsMargins(10, 0, 10, 0);
@@ -12,35 +15,23 @@ RightHeader::RightHeader(QWidget *parent) : QWidget(parent)
     btnMenu->setStyleSheet("background-color: transparent; color: white; font-size: 20px; font-weight: bold; text-align: left;");
     btnMenu->setCursor(Qt::PointingHandCursor);
 
-    // 2. ✅ NEW: Professional Mechanical Gear Toggle
+    // 2. Swipe Toggle
     btnSwipeToggle = new QPushButton("⚙ SWIPE", this);
-    btnSwipeToggle->setCheckable(true); // This makes it act like an ON/OFF switch
+    btnSwipeToggle->setCheckable(true);
     btnSwipeToggle->setCursor(Qt::PointingHandCursor);
     btnSwipeToggle->setStyleSheet(
-        "QPushButton { "
-        "  background-color: #2D2D30; color: #9CA3AF; "
-        "  font-weight: bold; font-size: 13px; padding: 6px 12px; "
-        "  border-radius: 4px; border: 1px solid #3E3E42; min-width: 80px; "
-        "} "
-        "QPushButton:hover { "
-        "  background-color: #3E3E42; border: 1px solid #00E5FF; " // Cyan hover glow
-        "} "
-        "QPushButton:checked { "
-        "  background-color: #00E5FF; color: black; border: 1px solid #00E5FF; " // Active state
-        "}"
+        "QPushButton { background-color: #2D2D30; color: #9CA3AF; font-weight: bold; font-size: 13px; padding: 6px 12px; border-radius: 4px; border: 1px solid #3E3E42; min-width: 80px; } "
+        "QPushButton:hover { background-color: #3E3E42; border: 1px solid #00E5FF; } "
+        "QPushButton:checked { background-color: #00E5FF; color: black; border: 1px solid #00E5FF; }"
         );
 
-    // 3. The Blinking Bulb
+    // 3. Blinking Bulb
     lblBulb = new QLabel("●", this);
     lblBulb->setStyleSheet("color: #10B981; font-size: 18px;");
-
     blinkTimer = new QTimer(this);
     connect(blinkTimer, &QTimer::timeout, this, [this]() {
-        if (isBulbVisible) {
-            lblBulb->setStyleSheet("color: transparent; font-size: 18px;");
-        } else {
-            lblBulb->setStyleSheet("color: " + bulbColor + "; font-size: 18px;");
-        }
+        if (isBulbVisible) lblBulb->setStyleSheet("color: transparent; font-size: 18px;");
+        else lblBulb->setStyleSheet("color: " + bulbColor + "; font-size: 18px;");
         isBulbVisible = !isBulbVisible;
     });
     blinkTimer->start(600);
@@ -55,31 +46,61 @@ RightHeader::RightHeader(QWidget *parent) : QWidget(parent)
     statusLayout->addWidget(lblBulb);
     statusLayout->addWidget(lblStatus);
 
-    // 5. Standby Button
-    QPushButton *btnStandby = new QPushButton("STANDBY", this);
-    btnStandby->setStyleSheet("background-color: transparent; border: 2px solid #10B981; color: #10B981; font-weight: bold; padding: 5px 15px;");
+    // 5. ✅ FIX: Assign to the MEMBER variable, NOT a local variable
+    btnStandby = new QPushButton("STANDBY", this);
+    btnStandby->setStyleSheet("background-color: transparent; border: 2px solid #10B981; color: #10B981; font-weight: bold; padding: 5px 15px; border-radius: 4px;");
+
+    // Wire Standby to Emergency Stop
+    connect(btnStandby, &QPushButton::clicked, this, [this]() {
+        if (m_backend) m_backend->toggleEmergencyStop();
+    });
 
     // Assemble Layout
     layout->addWidget(btnMenu);
     layout->addWidget(statusContainer, 1, Qt::AlignCenter);
-    layout->addWidget(btnSwipeToggle); // Added the new button here
+    layout->addWidget(btnSwipeToggle);
     layout->addWidget(btnStandby);
 
-    // Wire up signals
+    // Wire signals
     connect(btnMenu, &QPushButton::clicked, this, &RightHeader::menuClicked);
-
-    // ✅ Wire the new push button toggle to the swipe lock signal
     connect(btnSwipeToggle, &QPushButton::toggled, this, &RightHeader::swipeLockChanged);
+
+    // ✅ Backend Telemetry Connection
+    if (m_backend) {
+        connect(m_backend, &ClientBackend::telemetryChanged, this, &RightHeader::updateTelemetryUI);
+    }
 }
 
 void RightHeader::updateStatusText(const QString &text, bool isAutoMode)
 {
+    normalStatusText = text;
+    isNormalAuto = isAutoMode;
+    // Apply initial colors
+    bulbColor = isNormalAuto ? "#F59E0B" : "#10B981";
     lblStatus->setText(text);
-    if (isAutoMode) {
-        lblStatus->setStyleSheet("color: #F59E0B; font-weight: bold; font-size: 14px;");
-        bulbColor = "#F59E0B"; // Orange
+    lblStatus->setStyleSheet(QString("color: %1; font-weight: bold; font-size: 14px;").arg(bulbColor));
+}
+
+void RightHeader::updateTelemetryUI()
+{
+    if (!m_backend) return;
+
+    bool isEmergency = m_backend->property("isEmergency").toBool();
+    bool isMoving = m_backend->property("isPhysicallyMoving").toBool();
+    bool isRunning = m_backend->property("isRunning").toBool();
+
+    // Logic: If emergency, show ALARM, else show status
+    if (isEmergency) {
+        btnStandby->setText("E-STOPPED");
+        btnStandby->setStyleSheet("border: 2px solid #EF4444; color: #EF4444; font-weight: bold; padding: 5px 15px; border-radius: 4px;");
+    } else if (isMoving) {
+        btnStandby->setText("IN MOTION");
+        btnStandby->setStyleSheet("border: 2px solid #00E5FF; color: #00E5FF; font-weight: bold; padding: 5px 15px; border-radius: 4px;");
+    } else if (isRunning) {
+        btnStandby->setText("RUNNING");
+        btnStandby->setStyleSheet("border: 2px solid #F59E0B; color: #F59E0B; font-weight: bold; padding: 5px 15px; border-radius: 4px;");
     } else {
-        lblStatus->setStyleSheet("color: #10B981; font-weight: bold; font-size: 14px;");
-        bulbColor = "#10B981"; // Green
+        btnStandby->setText("STANDBY");
+        btnStandby->setStyleSheet("border: 2px solid #10B981; color: #10B981; font-weight: bold; padding: 5px 15px; border-radius: 4px;");
     }
 }

@@ -6,28 +6,41 @@
 #include <QLabel>
 #include <QTimer>
 
+class ClientBackend; // ✅ Forward declare backend
+
 class RightHeader : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit RightHeader(QWidget *parent = nullptr);
+    // ✅ Add backend to constructor
+    explicit RightHeader(ClientBackend *backend, QWidget *parent = nullptr);
     void updateStatusText(const QString &text, bool isAutoMode = false);
 
 signals:
     void menuClicked();
     void swipeLockChanged(bool isUnlocked);
 
+private slots:
+    void updateTelemetryUI(); // ✅ Auto-updates safety and standby states
+
 private:
+    ClientBackend *m_backend;
+
     QPushButton *btnMenu;
-    QPushButton *btnSwipeToggle; // ✅ Changed from QCheckBox to QPushButton
+    QPushButton *btnSwipeToggle;
     QLabel *lblStatus;
+    QPushButton *btnStandby; // ✅ Moved here so we can dynamically change it
 
     // Bulb Animation
     QLabel *lblBulb;
     QTimer *blinkTimer;
     bool isBulbVisible = true;
     QString bulbColor = "#10B981";
+
+    // Tracks normal UI text so we can restore it after an error clears
+    QString normalStatusText = "MANUAL | JOG : CARTESIAN";
+    bool isNormalAuto = false;
 };
 
 #endif // RIGHTHEADER_H

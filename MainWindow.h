@@ -5,6 +5,8 @@
 #include <QSplitter>
 #include "LeftPanel.h"
 #include "RightPanel.h"
+#include "MenuTray.h"
+#include "ClientBackend.h" // ✅ MUST INCLUDE THIS
 
 class MainWindow : public QMainWindow
 {
@@ -15,9 +17,12 @@ public:
     ~MainWindow();
 
 private:
-    QSplitter *mainSplitter;
     LeftPanel *leftPanel;
     RightPanel *rightPanel;
+    QSplitter *mainSplitter;
+    MenuTray *menuTray;
+
+    ClientBackend *m_backend; // ✅ MUST ADD THIS
 };
 
 #endif // MAINWINDOW_H

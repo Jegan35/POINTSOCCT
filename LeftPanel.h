@@ -6,30 +6,61 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
-#include <QStackedWidget> // ✅ ADD THIS LINE
-#include <QMenu>          // ✅ Ensure this is also here for your menu
-#include <QAction>        // ✅ Ensure this is also here
+#include <QStackedWidget>
+#include <QMenu>
+#include <QAction>
+#include <QElapsedTimer>
 #include "OcctWidget.h"
+
+
+// ✅ ADD THIS
+#include "ClientBackend.h"
 
 class LeftPanel : public QWidget
 {
     Q_OBJECT
 public:
-    explicit LeftPanel(QWidget *parent = nullptr);
-    void toggleFooterSwipe(); // Make sure this is declared
+    // ✅ ADD backend to constructor
+    explicit LeftPanel(ClientBackend *backend, QWidget *parent = nullptr);
+    void toggleFooterSwipe();
     void setSwipeEnabled(bool enabled);
-
+signals:
+    // ... your existing signals ...
+    void requestTabChange(int tabIndex); // ✅ Add this new signal
 protected:
-    bool eventFilter(QObject *watched, QEvent *event) override; // ✅ Intercepts the mouse
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
+private slots:
+    // ✅ ADD THESE SLOTS to listen to the server
+    void updateTelemetryUI();
+    void updateDirectoryUI();
 
 private:
     void setupUI();
     bool isSwipeUnlocked = false;
+    QElapsedTimer m_uiThrottleTimer;
     QPoint dragStartPos;
     OcctWidget *myMainWidget;
+
+    // ✅ ADD Backend Pointer
+    ClientBackend *m_backend;
+
+
+    // ✅ PROMOTE UI elements to class members so slots can update them
     QLabel *lblXYZ;
     QLabel *lblABC;
-    QStackedWidget *footerStack; // This will now work
+    QLabel *m_lblJoints[6];
+    QStackedWidget *footerStack;
+
+    QPushButton *m_btnServo;
+    QPushButton *m_btnRun;
+    QPushButton *m_btnStart;
+    QPushButton *m_btnMode;
+    QPushButton *m_btnSysHealth;
+
+    QLabel *m_lblTP;
+    QLabel *m_lblPR;
+    QLabel *m_lblTR;
 };
 
 #endif // LEFTPANEL_H

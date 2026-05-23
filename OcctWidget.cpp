@@ -14,6 +14,7 @@
 #include <Graphic3d_MaterialAspect.hxx> // For metallic rendering
 #include <QTimer>
 #include <Graphic3d_HorizontalTextAlignment.hxx>
+#include <BRepBuilderAPI_MakePolygon.hxx>
 
 
 // ==========================================
@@ -83,6 +84,57 @@ OcctWidget::OcctWidget(QWidget *parent) : QWidget(parent)
 }
 
 OcctWidget::~OcctWidget() {}
+
+
+// =================================================================
+// CREATES THICK 3D ARROWS (ULTRA-LIGHTWEIGHT PERFORMANCE)
+// =================================================================
+Handle(AIS_ColoredShape) OcctWidget::createThickTriad(double scale)
+{
+    TopoDS_Compound triad;
+    BRep_Builder builder;
+    builder.MakeCompound(triad);
+
+    double cylR = 4.0 * scale;   // Slightly adjusted for better visuals
+    double cylL = 80.0 * scale;
+    double coneR = 10.0 * scale;
+    double coneL = 20.0 * scale;
+
+    // X Axis (Red)
+    TopoDS_Shape xCyl = BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(0,0,0), gp_Dir(1,0,0)), cylR, cylL).Shape();
+    TopoDS_Shape xCone = BRepPrimAPI_MakeCone(gp_Ax2(gp_Pnt(cylL,0,0), gp_Dir(1,0,0)), coneR, 0, coneL).Shape();
+
+    // Y Axis (Green)
+    TopoDS_Shape yCyl = BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(0,0,0), gp_Dir(0,1,0)), cylR, cylL).Shape();
+    TopoDS_Shape yCone = BRepPrimAPI_MakeCone(gp_Ax2(gp_Pnt(0,cylL,0), gp_Dir(0,1,0)), coneR, 0, coneL).Shape();
+
+    // Z Axis (Blue)
+    TopoDS_Shape zCyl = BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(0,0,0), gp_Dir(0,0,1)), cylR, cylL).Shape();
+    TopoDS_Shape zCone = BRepPrimAPI_MakeCone(gp_Ax2(gp_Pnt(0,0,cylL), gp_Dir(0,0,1)), coneR, 0, coneL).Shape();
+
+    builder.Add(triad, xCyl); builder.Add(triad, xCone);
+    builder.Add(triad, yCyl); builder.Add(triad, yCone);
+    builder.Add(triad, zCyl); builder.Add(triad, zCone);
+
+    // 🚀 CRITICAL OPTIMIZATION: Force a coarse, lightweight mesh! (5.0 instead of 0.5)
+    BRepMesh_IncrementalMesh(triad, 5.0);
+
+    Handle(AIS_ColoredShape) coloredTriad = new AIS_ColoredShape(triad);
+
+    // Turn off heavy edge calculations
+    coloredTriad->Attributes()->SetFaceBoundaryDraw(Standard_False);
+    coloredTriad->Attributes()->SetIsoOnTriangulation(Standard_False);
+
+    // Apply colors
+    coloredTriad->SetCustomColor(xCyl, Quantity_NOC_RED);
+    coloredTriad->SetCustomColor(xCone, Quantity_NOC_RED);
+    coloredTriad->SetCustomColor(yCyl, Quantity_NOC_GREEN);
+    coloredTriad->SetCustomColor(yCone, Quantity_NOC_GREEN);
+    coloredTriad->SetCustomColor(zCyl, Quantity_NOC_BLUE1);
+    coloredTriad->SetCustomColor(zCone, Quantity_NOC_BLUE1);
+
+    return coloredTriad;
+}
 
 void OcctWidget::initOCCT()
 {
@@ -615,24 +667,39 @@ void OcctWidget::loadDefaultRobot()
     QTimer::singleShot(50, this, &OcctWidget::loadNextRobotLink);
 }
 
+
 void OcctWidget::loadNextRobotLink()
 {
-    // 1. Check if we are finished loading all 6 parts
     if (myCurrentLoadIndex > 5) {
+        myBaseTriad = createThickTriad(1.5);
+        myTipTriad = createThickTriad(1.2);
 
-        // ✅ THE FIX: Force the math update ONE LAST TIME so the final link snaps into place!
+        myContext->SetDisplayMode(myBaseTriad, 1, Standard_False);
+        myContext->SetDisplayMode(myTipTriad, 1, Standard_False);
+
+        // 🚀 CRITICAL FIX: Set the Base Arrow's location ONCE here, and never touch it again!
+        gp_Trsf globalRot;
+        globalRot.SetRotation(gp_Ax1(gp_Pnt(0,0,0), gp_Dir(0,0,1)), -M_PI / 2.0);
+        myContext->SetLocation(myBaseTriad, TopLoc_Location(globalRot));
+
+        myContext->Display(myBaseTriad, Standard_False);
+        myContext->Display(myTipTriad, Standard_False);
+
+        myContext->Deactivate(myBaseTriad);
+        myContext->Deactivate(myTipTriad);
+
         updateRobotPosture(0, 0, 0, 0, 0, 0);
 
         myView->FitAll();
         myContext->UpdateCurrentViewer();
-
-        // Apply the selection mode
         setSelectionMode(myCurrentSelectionMode);
 
-        emit statusUpdate("✅ Successfully loaded 6 STL robot links instantly. Robot is visual only.");
-        myCurrentLoadIndex = -1; // Reset tracker
+        emit statusUpdate("✅ Successfully loaded 6 STL robot links.");
+        myCurrentLoadIndex = -1;
         return;
     }
+    // ... [keep rest of function] ...
+    // ... [KEEP THE REST OF YOUR LOAD LOGIC EXACTLY AS IT IS] ...
 
     // 2. Setup the file path
     QString folderPath = "/home/texsonics/Documents/occtPro/step/";
@@ -751,12 +818,69 @@ void OcctWidget::updateRobotPosture(double j1, double j2, double j3, double j4, 
     // If your STL robot has a 7th piece (the tool flange):
     if (myRobotLinks.size() > 6) myContext->SetLocation(myRobotLinks[6], TopLoc_Location(globalRot * accum6 * baseTrsf));
 
-    // Force the screen to redraw the new positions instantly
-    myContext->UpdateCurrentViewer();
+    // ========================================================
+    // ✅ ATTACH THE ARROWS TO THE ROBOT
+    // ========================================================
+    // ... [Your existing R1 to accum6 math is above this] ...
+
+    if (!myTipTriad.IsNull()) {
+        gp_Trsf moveToTip;
+        moveToTip.SetTranslation(gp_Vec(837.0 + 101.0, 0.0, 1252.0));
+
+        // This is the absolute mathematical position of the Tool Center Point
+        gp_Trsf finalTipTrsf = globalRot * accum6 * moveToTip;
+        myContext->SetLocation(myTipTriad, TopLoc_Location(finalTipTrsf));
+
+        // ========================================================
+        // ✅ DRAW THE LIVE TRAJECTORY TRAIL
+        // ========================================================
+        // Get the absolute (X, Y, Z) point in the 3D room
+        // ========================================================
+        // ✅ OPTIMIZED: DRAW THE LIVE TRAJECTORY TRAIL
+        // ========================================================
+        gp_Pnt currentTCP = gp_Pnt(0,0,0).Transformed(finalTipTrsf);
+
+        if (myTrajectoryPoints.empty() || myTrajectoryPoints.back().Distance(currentTCP) > 1.0) {
+            myTrajectoryPoints.push_back(currentTCP);
+            if (myTrajectoryPoints.size() > 500) {
+                myTrajectoryPoints.erase(myTrajectoryPoints.begin());
+            }
+
+            // ✅ CRITICAL FIX: Only rebuild the CAD geometry every 100ms
+            static qint64 lastTrailRedraw = 0;
+            qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+
+            if (myTrajectoryPoints.size() > 1 && (currentTime - lastTrailRedraw > 100)) {
+                lastTrailRedraw = currentTime;
+
+                BRepBuilderAPI_MakePolygon polyMaker;
+                for (const auto& pt : myTrajectoryPoints) {
+                    polyMaker.Add(pt);
+                }
+
+                if (polyMaker.IsDone()) {
+                    TopoDS_Wire wire = polyMaker.Wire();
+
+                    if (myTrajectoryShape.IsNull()) {
+                        myTrajectoryShape = new AIS_Shape(wire);
+                        myContext->SetColor(myTrajectoryShape, Quantity_NOC_RED, Standard_False);//marker colour
+                        myContext->SetWidth(myTrajectoryShape, 3.0, Standard_False);
+                        myContext->Display(myTrajectoryShape, Standard_False);
+                        myContext->Deactivate(myTrajectoryShape);
+                    } else {
+                        myTrajectoryShape->SetShape(wire);
+                        myContext->Redisplay(myTrajectoryShape, Standard_False);
+                    }
+                }
+            }
+        }
+    }
+
+    // ========================================================
+    // 🚀 THE FIX FOR THE HANGING TABS AND STUTTERING
+    // ========================================================
+    this->update();
 }
-
-
-
 void OcctWidget::drawRoomGrid()
 {
     // Defined boundaries
@@ -876,13 +1000,22 @@ void OcctWidget::drawRoomGrid()
     myContext->Display(subLabel, Standard_False);
     myContext->Deactivate(subLabel);
 
-    // Center Trihedron (The origin arrows)
-    Handle(Geom_Axis2Placement) axis = new Geom_Axis2Placement(gp::XOY());
-    Handle(AIS_Trihedron) trihedron = new AIS_Trihedron(axis);
-    trihedron->SetSize(150);
-    myContext->Display(trihedron, Standard_False);
-    myContext->Deactivate(trihedron);
+
 
     myView->FitAll();
 }
 
+// ✅ NEW FUNCTION: Completely wipes the trail from memory and the 3D screen
+void OcctWidget::clearMarks()
+{
+    // 1. If the shape exists on screen, remove it
+    if (!myTrajectoryShape.IsNull()) {
+        myContext->Remove(myTrajectoryShape, Standard_True); // Remove from viewer
+        myTrajectoryShape.Nullify(); // Destroy the pointer
+    }
+
+    // 2. Clear all the saved X/Y/Z points so it doesn't instantly redraw
+    myTrajectoryPoints.clear();
+
+    emit statusUpdate("🧹 Trajectory marks cleared.");
+}

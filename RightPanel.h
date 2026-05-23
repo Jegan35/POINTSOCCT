@@ -2,51 +2,145 @@
 #define RIGHTPANEL_H
 
 #include <QWidget>
-#include <QPushButton>
-#include <QLabel>
 #include <QStackedWidget>
 #include <QTabWidget>
+#include <QLabel>
+#include <QPushButton>
+#include <QTableWidget>
+#include <QComboBox>
+#include <QLineEdit>
+#include <QVBoxLayout>
+#include <QElapsedTimer>
+#include "ClientBackend.h"
 #include "RightHeader.h"
 #include "MenuTray.h"
 
 class RightPanel : public QWidget
 {
     Q_OBJECT
+
 public:
-    explicit RightPanel(QWidget *parent = nullptr);
+    explicit RightPanel(ClientBackend *backend, QWidget *parent = nullptr);
+    void setActiveTab(int index);
+
+signals:
+    void swipeLockToggled(bool isUnlocked);
+    void requestFooterSwipe();
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
-signals:
-    void requestFooterSwipe(); // Tells MainWindow to swap the Left Panel
-    void swipeLockToggled(bool isUnlocked);
-
+private slots:
+    void onTelemetryChanged();
+    void onProgramDataChanged();
+    void onDirectoryDataChanged();
+    void onLocalStateChanged();
+    void onHighlightChanged();
 
 private:
     void setupUI();
+    void toggleMaximized();
+    void updateIOLeds();
+    void updateInstructionTable();
+    void updatePrTable();
+    void updateTpTable();
+    void updateOpPgDisplay();
+
+    // ✅ ADDED: Dialog popups
+    void showModifyTpDialog(int row);
+    void showModifyPrDialog(int row);
+
+    // Widget builders
     QWidget* buildSpeedPanel();
     QWidget* buildJointsPanel();
+    QWidget* buildIOModulesWidget();
+    QWidget* buildDataVarWidget();
+    QWidget* buildAxisLimitWidget();
+    QWidget* buildPrTableWidget();
+    QWidget* buildTpTableWidget();
+    QWidget* buildInstructionTableWidget();
+    QWidget* buildTpCtrlWidget();
+    QWidget* buildPrCtrlWidget();
 
-    // ✅ NEW: Helper function to build clean tab screens
-    QWidget* createPlaceholderTab(const QString &title);
+    // ---- Core ----
+    ClientBackend *m_backend;
+    QVBoxLayout   *m_mainLayout    = nullptr;
+    bool           m_isMaximized   = false;
 
-    RightHeader *header;
-    MenuTray *tray;
-    QStackedWidget *controlStack;
+    // ---- Normal-mode sections ----
+    RightHeader    *header       = nullptr;
+    QStackedWidget *controlStack = nullptr;
+    MenuTray       *tray         = nullptr;
 
-    // State Tracking
+    // ---- Jog controls (cartesian page) ----
+    QPushButton *btnToggleXYZ   = nullptr;
+    QPushButton *btnToggleOrient = nullptr;
+    QPushButton *btnXPlus = nullptr, *btnXMinus = nullptr;
+    QPushButton *btnYPlus = nullptr, *btnYMinus = nullptr;
+    QPushButton *btnZPlus = nullptr, *btnZMinus = nullptr;
     QString currentMovementMode = "JOG";
 
-    // Cartesian D-Pad Elements
-    QPushButton *btnToggleXYZ;
-    QPushButton *btnToggleOrient;
-    QPushButton *btnXPlus;
-    QPushButton *btnXMinus;
-    QPushButton *btnYPlus;
-    QPushButton *btnYMinus;
-    QPushButton *btnZPlus;
-    QPushButton *btnZMinus;
+    // ---- Workspace tabs (shared, always present) ----
+    QTabWidget  *m_workspaceTabs = nullptr;
+    QPushButton *m_btnMax        = nullptr;
+
+    // ---- Max-mode extra sections ----
+    QWidget        *m_instructionTableWidget = nullptr;
+    QStackedWidget *m_controlSwipeStack      = nullptr;
+
+    // ---- PR table ----
+    QTableWidget *m_prTable = nullptr;
+
+    // ---- TP table ----
+    QTableWidget *m_tpTable = nullptr;
+
+    // ---- IO LEDs ----
+    QLabel *m_diLeds[16] = {};
+    QLabel *m_doLeds[16] = {};
+
+    // ---- Instruction (staging) row cells ----
+    QLabel *m_stgInst    = nullptr;
+    QLabel *m_stgName1   = nullptr, *m_stgVal1 = nullptr, *m_stgDeg1 = nullptr;
+    QLabel *m_stgName2   = nullptr, *m_stgVal2 = nullptr, *m_stgDeg2 = nullptr;
+    QLabel *m_stgSpeed   = nullptr, *m_stgComment = nullptr;
+
+    // ---- Data-Var tab ----
+    QComboBox *m_varOutSel  = nullptr;
+    QLabel    *m_varOutVal  = nullptr;
+    QComboBox *m_varInSel   = nullptr;
+    QLineEdit *m_varInInput = nullptr;
+    QLineEdit *m_varInstNum = nullptr;
+
+    // ---- Axis-Limit / Simulation tab ----
+    QComboBox *m_simDiNum   = nullptr;
+    QComboBox *m_simDiState = nullptr;
+    QComboBox *m_simDoNum   = nullptr;
+    QComboBox *m_simDoState = nullptr;
+
+    // ---- TP-CTRL panel ----
+    QPushButton *m_btnTpModeLabel = nullptr;
+    QString      m_tpModeDisplay  = "TP Mode";
+    QLabel      *m_lblOpPg        = nullptr;
+    QComboBox   *m_tpParamSel     = nullptr;
+    QLineEdit   *m_tpParamVal     = nullptr;
+
+    // ---- PR-CTRL panel ----
+    QComboBox *m_instSel    = nullptr;
+    QComboBox *m_di1Sel     = nullptr;
+    QComboBox *m_di2Sel     = nullptr;
+    QComboBox *m_hlSel      = nullptr;
+    QComboBox *m_var1Sel    = nullptr;
+    QComboBox *m_var2Sel    = nullptr;
+    QComboBox *m_prParamSel = nullptr;
+    QLineEdit *m_prParamVal = nullptr;
+
+    // ---- Swipe tracking (control area) ----
+    QPoint m_ctrlSwipeStart;
+    bool   m_ctrlSwipeTracking = false;
+
+    // ---- UI throttle ----
+    QElapsedTimer m_uiThrottle;
 };
 
 #endif // RIGHTPANEL_H
