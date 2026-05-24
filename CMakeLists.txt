@@ -26,6 +26,7 @@ qt_add_executable(appOCCT
     ClientBackend.h ClientBackend.cpp
     LineGeometry.h LineGeometry.cpp
     LoginDialog.h LoginDialog.cpp
+    StepControl.h StepControl.cpp
 )
 # ✅ 2. ADDED Qt6::Qml and Qt6::Quick3D to target_link_libraries
 target_link_libraries(appOCCT

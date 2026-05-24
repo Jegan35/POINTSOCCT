@@ -46,6 +46,12 @@ class OcctWidget : public QWidget
 public:
     explicit OcctWidget(QWidget *parent = nullptr);
     ~OcctWidget() override;
+    bool hasLoadedPart() const { return !myLoadedPart.IsNull(); }
+    void clearLoadedPart();
+    void processCurrentSelection(double resolution);
+
+    // Add this new line right below it to read the origin:
+    QString getOriginText() const;
 
     // Defines whether this widget acts as the Main Left screen or the Isolated Right screen
     enum ViewRole { MainRole, SideRole };
@@ -54,7 +60,6 @@ public:
 
     void loadStepFile(const std::string& filePath);
     void loadDefaultRobot();
-
     // Shifts the loaded workpiece for calibration
     void offsetWorkpiece(double dx, double dy, double dz);
 
@@ -75,10 +80,12 @@ signals:
     void statusUpdate(const QString& msg);
     void partSelectedForIsolation(const TopoDS_Shape& shape);
     void coordinatesExtracted(const QString& xyzData);
-
+    void selectionChanged(bool isSelected);
+    void robotLoadComplete();
 protected:
     QPaintEngine* paintEngine() const override { return nullptr; }
 
+    void showEvent(QShowEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
@@ -121,7 +128,6 @@ private:
     void drawRoomGrid();
 
     // Centralized file writer
-    void processCurrentSelection();
     void regenerateCSV();
 
     void processEdge(const TopoDS_Edge& edge, QTextStream& out, double resolution);

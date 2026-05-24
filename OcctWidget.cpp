@@ -72,17 +72,17 @@
 
 OcctWidget::OcctWidget(QWidget *parent) : QWidget(parent)
 {
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
     setAttribute(Qt::WA_NoSystemBackground);
     setAttribute(Qt::WA_PaintOnScreen);
     setAttribute(Qt::WA_NativeWindow);
-    setMouseTracking(true);
+    setAttribute(Qt::WA_OpaquePaintEvent);
+    setAttribute(Qt::WA_DontCreateNativeAncestors); // ✅ MUST BE HERE
 
-    // ====================================================
-    // UPDATED: Set the default saving path for the CSV output
-    // ====================================================
+    setMouseTracking(true);
     myCSVPath = "/home/texsonics/Videos/extracted_paths.csv";
 }
-
 OcctWidget::~OcctWidget() {}
 
 
@@ -349,18 +349,12 @@ void OcctWidget::redoSelection()
     emit statusUpdate(QString("↪️ Redo successful. Current Paths in CSV: %1").arg(myPathHistory.size()));
 }
 
-void OcctWidget::processCurrentSelection()
+// Update the function signature to take the parameter
+void OcctWidget::processCurrentSelection(double resolution)
 {
     if (myContext.IsNull() || !myContext->HasSelectedShape()) return;
 
-    bool ok;
-    double resolution = QInputDialog::getDouble(this, tr("Set Robot Path Resolution"), tr("Enter point spacing (mm):"), 2.0, 0.1, 100.0, 2, &ok);
-
-    if (!ok) {
-        emit statusUpdate("⚠️ Extraction cancelled by user.");
-        myContext->ClearSelected(Standard_True);
-        return;
-    }
+    // ❌ WE COMPLETELY DELETED THE QInputDialog POPUP HERE! ❌
 
     myContext->InitSelected();
     int addedCount = 0;
@@ -488,15 +482,28 @@ void OcctWidget::processEdge(const TopoDS_Edge& edge, QTextStream& out, double r
     }
 }
 
-void OcctWidget::paintEvent(QPaintEvent *)
+void OcctWidget::paintEvent(QPaintEvent *event)
 {
+    // ✅ MUST BE CALLED: Keeps Qt's internal rendering loop happy
+    QWidget::paintEvent(event);
+
     if (myView.IsNull()) initOCCT();
     myView->Redraw();
 }
 
-void OcctWidget::resizeEvent(QResizeEvent *)
+void OcctWidget::resizeEvent(QResizeEvent *event)
 {
-    if (!myView.IsNull()) myView->MustBeResized();
+    QWidget::resizeEvent(event);
+
+    if (!myView.IsNull()) {
+        myView->MustBeResized(); // Tell X11 to update the dimensions
+
+        // ✅ NEW: Automatically re-frame the camera when the layout updates!
+        // This ensures the grid and text are never cut off after the "MAX" fix.
+        myView->FitAll();
+
+        myView->Redraw();
+    }
 }
 void OcctWidget::mousePressEvent(QMouseEvent *event)
 {
@@ -564,7 +571,7 @@ void OcctWidget::mousePressEvent(QMouseEvent *event)
             }
             else if (myRole == SideRole) {
                 // Right Window: Trigger YOUR exact extraction function!
-                processCurrentSelection();
+                processCurrentSelection(2.0);
             }
         }
     }
@@ -677,7 +684,6 @@ void OcctWidget::loadNextRobotLink()
         myContext->SetDisplayMode(myBaseTriad, 1, Standard_False);
         myContext->SetDisplayMode(myTipTriad, 1, Standard_False);
 
-        // 🚀 CRITICAL FIX: Set the Base Arrow's location ONCE here, and never touch it again!
         gp_Trsf globalRot;
         globalRot.SetRotation(gp_Ax1(gp_Pnt(0,0,0), gp_Dir(0,0,1)), -M_PI / 2.0);
         myContext->SetLocation(myBaseTriad, TopLoc_Location(globalRot));
@@ -689,17 +695,28 @@ void OcctWidget::loadNextRobotLink()
         myContext->Deactivate(myTipTriad);
 
         updateRobotPosture(0, 0, 0, 0, 0, 0);
-
-        myView->FitAll();
-        myContext->UpdateCurrentViewer();
         setSelectionMode(myCurrentSelectionMode);
 
         emit statusUpdate("✅ Successfully loaded 6 STL robot links.");
+
         myCurrentLoadIndex = -1;
+        emit robotLoadComplete();
+
+        // ==========================================================
+        // ✅ THE FIX: DELAYED CAMERA CENTERING
+        // We wait 250ms to guarantee the Qt layout has completely
+        // finished stretching to fullscreen before we calculate the zoom.
+        // ==========================================================
+        QTimer::singleShot(250, this, [this]() {
+            if (!myView.IsNull()) {
+                myView->MustBeResized(); // Sync with X11 OS Window
+                myView->FitAll();        // Perfectly frame the grid and robot
+                myView->Redraw();        // Paint it to the screen
+            }
+        });
+
         return;
     }
-    // ... [keep rest of function] ...
-    // ... [KEEP THE REST OF YOUR LOAD LOGIC EXACTLY AS IT IS] ...
 
     // 2. Setup the file path
     QString folderPath = "/home/texsonics/Documents/occtPro/step/";
@@ -1018,4 +1035,40 @@ void OcctWidget::clearMarks()
     myTrajectoryPoints.clear();
 
     emit statusUpdate("🧹 Trajectory marks cleared.");
+}
+
+// ==========================================================
+// ✅ THE FIX: Wake up the Native X11 Window when the page flips
+// ==========================================================
+// ==========================================================
+// ✅ THE FIX: Auto-trigger the layout sync (The "MAX" trick)
+// ==========================================================
+void OcctWidget::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+
+    // Wait 100ms for Qt's layout and the Linux X11 Window Manager
+    // to finish settling, then force the 3D canvas to snap to bounds!
+    QTimer::singleShot(100, this, [this]() {
+        if (!myView.IsNull()) {
+            myView->MustBeResized();
+            myView->Redraw();
+            this->update(); // Force a Qt UI repaint just in case
+        }
+    });
+}
+
+void OcctWidget::clearLoadedPart() {
+    if (!myLoadedPart.IsNull()) {
+        myContext->Remove(myLoadedPart, Standard_True);
+        myLoadedPart.Nullify();
+        emit statusUpdate("🗑️ STEP/DXF file cleared from view.");
+        myView->Redraw();
+    }
+}
+QString OcctWidget::getOriginText() const {
+    return QString("X: %1 | Y: %2 | Z: %3")
+    .arg(myCustomOrigin.X(), 0, 'f', 3)
+        .arg(myCustomOrigin.Y(), 0, 'f', 3)
+        .arg(myCustomOrigin.Z(), 0, 'f', 3);
 }

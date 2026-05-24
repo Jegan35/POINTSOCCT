@@ -10,6 +10,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <cmath>
+#include "StepControl.h"
 // ─────────────────────────────────────────────────────────────────────────────
 //  DESIGN SYSTEM  –  Professional Robotics HMI Palette (HIGH VISIBILITY)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -227,21 +228,50 @@ LeftPanel::LeftPanel(ClientBackend *backend, QWidget *parent)
 void LeftPanel::setupUI()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(8, 8, 8, 8);
-    mainLayout->setSpacing(4);
+    mainLayout->setContentsMargins(4, 4, 4, 4);
+    mainLayout->setSpacing(2);
 
+
+    // ══════════════════════════════════════════════════════════════
+    //  MIDDLE: 3D Canvas (left) + Joint readouts (right)
+    // ══════════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════
+    //  MIDDLE: 3D Canvas (left) + Joint readouts (right)
+    // ══════════════════════════════════════════════════════════════
     // ══════════════════════════════════════════════════════════════
     //  MIDDLE: 3D Canvas (left) + Joint readouts (right)
     // ══════════════════════════════════════════════════════════════
     QHBoxLayout *midLayout = new QHBoxLayout();
     midLayout->setSpacing(6);
 
-    myMainWidget = new OcctWidget(this);
+    QFrame *occtContainer = new QFrame(this);
+    occtContainer->setObjectName("occtContainer");
+    occtContainer->setStyleSheet("#occtContainer { background-color: #08090E; border: 1px solid #007A99; border-radius: 3px; }");
+
+    // ✅ THE STRICT LAYOUT FIX:
+    // "Expanding" forces the Left Panel to demand exactly 50% of the screen.
+    // "setMinimumSize" completely destroys OpenCASCADE's massive native
+    // size hint so it can NEVER push your bottom buttons off the screen again!
+    occtContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    occtContainer->setMinimumSize(100, 100);
+
+    occtContainer->setAttribute(Qt::WA_NativeWindow);
+
+    QVBoxLayout *containerLay = new QVBoxLayout(occtContainer);
+    containerLay->setContentsMargins(1, 1, 1, 1);
+    containerLay->setSpacing(0);
+
+    myMainWidget = new OcctWidget(occtContainer);
     myMainWidget->setViewRole(OcctWidget::MainRole);
-    // Thin cyan frame around the 3D viewport
-    myMainWidget->setStyleSheet(
-        "OcctWidget { border: 1px solid #007A99; border-radius: 3px; background-color: #08090E; }");
-    midLayout->addWidget(myMainWidget, 4);
+
+    // Apply the exact same strict rules to the native widget itself
+    myMainWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    myMainWidget->setMinimumSize(100, 100);
+
+    containerLay->addWidget(myMainWidget);
+    midLayout->addWidget(occtContainer, 4);
+
+    connect(myMainWidget, &OcctWidget::selectionChanged, this, &LeftPanel::partSelectionStateChanged);
 
     // ── Joint column ──────────────────────────────────────────────
     QVBoxLayout *jointLayout = new QVBoxLayout();
@@ -259,7 +289,7 @@ void LeftPanel::setupUI()
         jointLayout->addWidget(m_lblJoints[i]);
     }
     midLayout->addLayout(jointLayout, 1);
-    mainLayout->addLayout(midLayout, 1);
+    mainLayout->addLayout(midLayout, 6);
 
     // ══════════════════════════════════════════════════════════════
     //  BOTTOM 1: Coordinate readouts
@@ -280,7 +310,7 @@ void LeftPanel::setupUI()
     lblABC->setStyleSheet(DS::coordLbl(15));
     coordLayout->addWidget(lblABC, 2);
 
-    mainLayout->addLayout(coordLayout);
+    mainLayout->addLayout(coordLayout, 0);
 
     // ══════════════════════════════════════════════════════════════
     //  BOTTOM 2: Swappable Footer Stack
@@ -359,30 +389,74 @@ void LeftPanel::setupUI()
 
     connect(m_btnSysHealth, &QPushButton::clicked, this, [this]() {
         QDialog dialog(this);
-        dialog.setFixedSize(320, 110);
+        dialog.setFixedSize(360, 160);
         dialog.setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
-        dialog.setStyleSheet(
-            "QDialog { background-color: #141820; border: 1px solid #3A4460; border-radius: 6px; }");
+        dialog.setAttribute(Qt::WA_TranslucentBackground); // Crucial for clean borders
+        dialog.setStyleSheet("background: transparent;");
 
-        QVBoxLayout *layout = new QVBoxLayout(&dialog);
-        layout->setContentsMargins(16, 16, 16, 16);
+        // 1. Create the Frame as the ONLY child of the dialog
+        QFrame *mainFrame = new QFrame(&dialog);
+        mainFrame->setObjectName("container");
 
+        // 2. Determine state & Colors
         QString currentErr = m_backend ? m_backend->property("errorMessage").toString() : "";
         QString errLower   = currentErr.toLower().trimmed();
-        if (currentErr.isEmpty() || errLower == "no active errors" ||
-            errLower == "no error" || errLower == "none")
-            currentErr = "SYSTEM IS OPERATIONAL";
+        bool isError = !currentErr.isEmpty() && errLower != "no active errors" && errLower != "no error" && errLower != "none";
+        if (!isError) currentErr = "SYSTEM IS OPERATIONAL";
 
-        QLabel *lblMsg = new QLabel(currentErr, &dialog);
-        lblMsg->setStyleSheet(
-            "color: #E8EDF5; font-family: 'Rajdhani','Consolas',monospace;"
-            "font-weight: 700; font-size: 14px; letter-spacing: 0.5px;");
-        lblMsg->setAlignment(Qt::AlignCenter);
+        // 3. APPLY BORDER STYLES TO THE FRAME
+        mainFrame->setStyleSheet(QString(
+                                     "#container { background-color: #0d1117; border: 3px solid %1; border-radius: 8px; }"
+                                     ).arg(isError ? "#FF5252" : "#22C55E"));
+
+        // 4. Use a layout that puts everything inside the frame
+        QVBoxLayout *mainLayout = new QVBoxLayout(mainFrame);
+        mainLayout->setContentsMargins(0, 0, 0, 0);
+        mainLayout->setSpacing(0); // Removes layout gap between header and message
+
+        // --- HEADER BAR ---
+        QWidget *headerBar = new QWidget();
+        headerBar->setStyleSheet("background-color: #1a1e2a; border-bottom: 1px solid #2a2d35; border-top-left-radius: 5px; border-top-right-radius: 5px;");
+        QHBoxLayout *headerLay = new QHBoxLayout(headerBar);
+        // Reduced vertical margins to tighten the header
+        headerLay->setContentsMargins(12, 4, 5, 4);
+
+        QLabel *title = new QLabel("SYSTEM STATUS");
+        title->setStyleSheet("color: #00bcd4; font-weight: bold; font-size: 10px; letter-spacing: 1px; background: transparent;");
+
+        QPushButton *btnClose = new QPushButton("✖");
+        btnClose->setFixedSize(24, 24);
+        btnClose->setStyleSheet("QPushButton { background: transparent; color: #888; font-size: 12px; border: none; } QPushButton:hover { color: #ff5252; }");
+        connect(btnClose, &QPushButton::clicked, &dialog, &QDialog::close);
+
+        headerLay->addWidget(title);
+        headerLay->addStretch();
+        headerLay->addWidget(btnClose);
+        mainLayout->addWidget(headerBar);
+
+        // --- MESSAGE AREA ---
+        QLabel *lblMsg = new QLabel(currentErr);
+        // Reduced top padding to 5px so it hugs the header
+        lblMsg->setStyleSheet(QString(
+                                  "color: %1; font-family: 'Rajdhani', sans-serif; "
+                                  "font-weight: 700; font-size: 14px; padding: 5px 10px 10px 10px; background: transparent;"
+                                  ).arg(isError ? "#FF5252" : "#E8EDF5"));
+
+        lblMsg->setAlignment(Qt::AlignHCenter);
         lblMsg->setWordWrap(true);
-        layout->addWidget(lblMsg);
 
-        QPoint pos = m_btnSysHealth->mapToGlobal(QPoint(0, 0));
-        dialog.move(pos.x(), pos.y() - dialog.height() - 8);
+        // Push the text to the top, right below the header
+        mainLayout->addWidget(lblMsg, 0, Qt::AlignTop);
+        // Add stretch to fill the rest of the 160px height with empty space
+        mainLayout->addStretch();
+
+        // Force the frame to fill the dialog
+        QVBoxLayout *outer = new QVBoxLayout(&dialog);
+        outer->setContentsMargins(0, 0, 0, 0);
+        outer->addWidget(mainFrame);
+
+        QPoint pos = m_btnSysHealth->mapToGlobal(QPoint(0, -dialog.height() - 12));
+        dialog.move(pos);
         dialog.exec();
     });
     footerGrid->addWidget(m_btnSysHealth, 1, 0, 1, 2);
@@ -694,7 +768,17 @@ void LeftPanel::setupUI()
     QLabel *lblToolName = new QLabel("Tool Name...", page1);
     lblToolName->setStyleSheet(DS::darkBox());
 
-    QPushButton *btnAct1 = new QPushButton("ACTION 1", page1); btnAct1->setStyleSheet(DS::btnAction());
+    QPushButton *btnAct1 = new QPushButton("DXF FILES", page1);
+    btnAct1->setStyleSheet(DS::btnAction());
+    connect(btnAct1, &QPushButton::clicked, this, [this]() {
+        StepControl stepDialog(myMainWidget, this);
+        // Wire the step manager to change the Right Panel tab!
+        connect(&stepDialog, &StepControl::requestDxfTab, this, [this]() {
+            emit requestTabChange(5); // 5 is the index of the new DXF tab
+        });
+        stepDialog.exec();
+    });
+
     QPushButton *btnAct2 = new QPushButton("ACTION 2", page1); btnAct2->setStyleSheet(DS::btnAction());
     QPushButton *btnAct3 = new QPushButton("ACTION 3", page1); btnAct3->setStyleSheet(DS::btnAction());
     QPushButton *btnAct4 = new QPushButton("ACTION 4", page1); btnAct4->setStyleSheet(DS::btnAction());
@@ -717,7 +801,11 @@ void LeftPanel::setupUI()
 
     footerStack->addWidget(page0);
     footerStack->addWidget(page1);
-    mainLayout->addWidget(footerStack);
+
+    // ✅ THE FIX: Lock the height in both directions and disable stretching
+    footerStack->setMinimumHeight(110);
+    footerStack->setMaximumHeight(120);
+    mainLayout->addWidget(footerStack, 0);
 
     QTimer::singleShot(500, myMainWidget, &OcctWidget::loadDefaultRobot);
     qApp->installEventFilter(this);
@@ -741,6 +829,27 @@ void LeftPanel::setupUI()
         }
     });
     dummyTimer->start(50);
+    // ==========================================================
+    // ✅ THE ULTIMATE X11 SYNC HACK: The "Margin Jiggle"
+    // ==========================================================
+    // We listen for the robot to finish loading (which takes a second or two).
+    // Once it is done, we invisibly change the layout margin by 1 pixel and
+    // instantly change it back. This mathematically forces Qt to fire a real
+    // QResizeEvent down to the 3D window, perfectly syncing Linux X11!
+    connect(myMainWidget, &OcctWidget::robotLoadComplete, this, [this]() {
+        QTimer::singleShot(50, this, [this]() {
+            int left, top, right, bottom;
+            this->layout()->getContentsMargins(&left, &top, &right, &bottom);
+
+            // 1. Shrink the layout by exactly 1 pixel
+            this->layout()->setContentsMargins(left, top, right + 1, bottom);
+
+            // 2. Wait 50ms, then snap it back to normal
+            QTimer::singleShot(50, this, [this, left, top, right, bottom]() {
+                this->layout()->setContentsMargins(left, top, right, bottom);
+            });
+        });
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

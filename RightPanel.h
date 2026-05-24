@@ -15,17 +15,25 @@
 #include "RightHeader.h"
 #include "MenuTray.h"
 
+class OcctWidget;
+class QTextEdit;
+
 class RightPanel : public QWidget
 {
     Q_OBJECT
 
 public:
+    OcctWidget* getDxfPreviewWidget() const { return m_dxfPreviewWidget; }
     explicit RightPanel(ClientBackend *backend, QWidget *parent = nullptr);
     void setActiveTab(int index);
+
+public slots:
+    void setGetPointsEnabled(bool enabled);
 
 signals:
     void swipeLockToggled(bool isUnlocked);
     void requestFooterSwipe();
+    void maximizedToggled(bool isMaximized);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -39,6 +47,8 @@ private slots:
     void onHighlightChanged();
 
 private:
+    OcctWidget *m_dxfPreviewWidget = nullptr;
+    QTextEdit *m_txtCoordinates = nullptr;
     void setupUI();
     void toggleMaximized();
     void updateIOLeds();
@@ -62,6 +72,7 @@ private:
     QWidget* buildInstructionTableWidget();
     QWidget* buildTpCtrlWidget();
     QWidget* buildPrCtrlWidget();
+    QWidget* buildDxfFileWidget();
 
     // ---- Core ----
     ClientBackend *m_backend;
@@ -79,6 +90,7 @@ private:
     QPushButton *btnXPlus = nullptr, *btnXMinus = nullptr;
     QPushButton *btnYPlus = nullptr, *btnYMinus = nullptr;
     QPushButton *btnZPlus = nullptr, *btnZMinus = nullptr;
+    QPushButton *m_btnGetPoints;
     QString currentMovementMode = "JOG";
 
     // ---- Workspace tabs (shared, always present) ----

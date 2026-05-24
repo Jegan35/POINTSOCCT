@@ -2,24 +2,21 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QTimer>
-#include <QApplication> // Needed for the Close button to quit the app
+#include <QApplication>
 
 LoginDialog::LoginDialog(ClientBackend *backend, QWidget *parent)
-    : QDialog(parent), m_backend(backend)
+    : QWidget(parent), m_backend(backend) // ✅ Changed to QWidget
 {
-    // 1. MAKE DIALOG FULL SCREEN WITH A DARK BACKGROUND
-    setWindowState(Qt::WindowFullScreen);
-    setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
-
-    setStyleSheet("QDialog { background-color: #11111A; }");
+    // Apply background color to the main page area
+    setStyleSheet("LoginDialog { background-color: #11111A; }");
 
     // 2. CREATE THE CENTERED CONTAINER BOX
     QWidget *loginBox = new QWidget(this);
-    loginBox->setObjectName("loginBox"); // Named so the stylesheet only applies to the box, not the elements inside it
+    loginBox->setObjectName("loginBox");
     loginBox->setFixedSize(450, 550);
     loginBox->setStyleSheet("#loginBox { background-color: #27273A; border: 2px solid #3B3B50; border-radius: 8px; }");
 
-    // Center the box in the full screen
+    // Center the box in the screen
     QVBoxLayout *screenLayout = new QVBoxLayout(this);
     screenLayout->setAlignment(Qt::AlignCenter);
     screenLayout->addWidget(loginBox);
@@ -37,7 +34,6 @@ LoginDialog::LoginDialog(ClientBackend *backend, QWidget *parent)
     QPushButton *btnClose = new QPushButton("✖", this);
     btnClose->setFixedSize(30, 30);
     btnClose->setCursor(Qt::PointingHandCursor);
-    // Red on hover
     btnClose->setStyleSheet("QPushButton { background-color: transparent; color: #777; border: none; font-size: 18px; font-weight: bold; }"
                             "QPushButton:hover { color: #FF5252; }");
     connect(btnClose, &QPushButton::clicked, qApp, &QCoreApplication::quit); // Closes the app entirely
@@ -132,18 +128,17 @@ void LoginDialog::handleLoginClicked() {
     btnLogin->setEnabled(false);
 
     if (m_backend) {
-        // OVERRIDE FOR DESKTOP ACCESS
         m_backend->setProperty("authId", "TX-DESKTOP-DEBUG");
         m_backend->connectAndLogin(ipInput->text(), getSelectedRole(), userInput->text(), passInput->text());
     }
 }
 
 void LoginDialog::handleDesignModeClicked() {
-    accept();
+    emit loginSuccessful(); // ✅ FIX: Emits signal to change page
 }
 
 void LoginDialog::onLoginAccepted(QString role) {
-    accept();
+    emit loginSuccessful(); // ✅ FIX: Emits signal to change page
 }
 
 void LoginDialog::onLoginRejected(QString message) {

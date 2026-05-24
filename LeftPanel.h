@@ -21,11 +21,12 @@ class LeftPanel : public QWidget
     Q_OBJECT
 public:
     // ✅ ADD backend to constructor
+    OcctWidget* getMainOcctWidget() const { return myMainWidget; }
     explicit LeftPanel(ClientBackend *backend, QWidget *parent = nullptr);
     void toggleFooterSwipe();
     void setSwipeEnabled(bool enabled);
 signals:
-    // ... your existing signals ...
+    void partSelectionStateChanged(bool isSelected);
     void requestTabChange(int tabIndex); // ✅ Add this new signal
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;

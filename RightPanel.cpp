@@ -16,6 +16,8 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QValidator>
+#include "OcctWidget.h"
+#include <QTextEdit>
 
 // ============================================================
 //  OPTION LISTS  (mirrors QML frontend constants)
@@ -186,13 +188,17 @@ void RightPanel::setupUI()
     connectJog(btnYPlus); connectJog(btnYMinus);
     connectJog(btnZPlus); connectJog(btnZMinus);
     connect(btnHome,&QPushButton::clicked,this,[this]{ if(m_backend) m_backend->triggerHome(); });
+    QGridLayout *jogGrid = new QGridLayout();
+    jogGrid->setSpacing(10);
+    jogGrid->setAlignment(Qt::AlignCenter);
 
-    QGridLayout *jogGrid = new QGridLayout(); jogGrid->setSpacing(10); jogGrid->setAlignment(Qt::AlignCenter);
     jogGrid->addWidget(btnYPlus,  0,1); jogGrid->addWidget(btnXMinus,1,0);
     jogGrid->addWidget(btnHome,   1,1); jogGrid->addWidget(btnXPlus, 1,2);
     jogGrid->addWidget(btnYMinus, 2,1); jogGrid->addWidget(btnZPlus, 0,3);
     jogGrid->addWidget(btnZMinus, 2,3);
+
     dpadLay->addLayout(jogGrid);
+    dpadLay->addStretch(); // ✅ NEW: This physically stops the D-Pad from stretching vertically!
 
     controlStack->addWidget(cartWidget);       // index 0 – Cart D-pad
     controlStack->addWidget(buildSpeedPanel()); // index 1 – Speed config
@@ -216,11 +222,14 @@ void RightPanel::setupUI()
     m_workspaceTabs->setCornerWidget(m_btnMax, Qt::TopRightCorner);
     connect(m_btnMax, &QPushButton::clicked, this, &RightPanel::toggleMaximized);
 
-    m_workspaceTabs->addTab(buildPrTableWidget(),   "PROGRAM FILE"); // 0
-    m_workspaceTabs->addTab(buildIOModulesWidget(),  "I/O PANEL");   // 1
+    m_workspaceTabs->addTab(buildPrTableWidget(),    "PROGRAM FILE"); // 0
+    m_workspaceTabs->addTab(buildIOModulesWidget(),  "I/O PANEL");    // 1
     m_workspaceTabs->addTab(buildTpTableWidget(),    "TP FILE");      // 2
     m_workspaceTabs->addTab(buildDataVarWidget(),    "DATA VAR");     // 3
     m_workspaceTabs->addTab(buildAxisLimitWidget(),  "AXIS LIMIT");   // 4
+
+    // ✅ ADD THE NEW DXF TAB HERE (Index 5)
+    m_workspaceTabs->addTab(buildDxfFileWidget(),    "DXF FILE");     // 5
 
     // ---- 4. INSTRUCTION TABLE  (hidden by default) ----
     m_instructionTableWidget = buildInstructionTableWidget();
@@ -236,11 +245,11 @@ void RightPanel::setupUI()
     m_controlSwipeStack->hide();
 
     // ---- ASSEMBLE MAIN LAYOUT ----
-    m_mainLayout->addWidget(header,                  1);
-    m_mainLayout->addWidget(controlStack,            4);
-    m_mainLayout->addWidget(m_workspaceTabs,         5);
-    m_mainLayout->addWidget(m_instructionTableWidget,0);
-    m_mainLayout->addWidget(m_controlSwipeStack,     0);
+    m_mainLayout->addWidget(header, 0);                  // 0 = Take only minimum height
+    m_mainLayout->addWidget(controlStack, 0);            // 0 = Do NOT stretch vertically
+    m_mainLayout->addWidget(m_workspaceTabs, 1);         // 1 = Take ALL remaining screen space
+    m_mainLayout->addWidget(m_instructionTableWidget, 0);
+    m_mainLayout->addWidget(m_controlSwipeStack, 0);
 
     // ---- MENU TRAY ----
     tray = new MenuTray(m_backend, this);
@@ -285,53 +294,40 @@ void RightPanel::setupUI()
 //  In MAX mode: tabs(5) + staging(fixed 50px) + ctrl-swipe(2)
 //  staging widget has setFixedHeight so stretch=0 is correct
 // ============================================================
-// ============================================================
-//  toggleMaximized
-// ============================================================
 void RightPanel::toggleMaximized()
 {
-    m_isMaximized = !m_isMaximized;
+    static bool isMaximized = false;
+    isMaximized = !isMaximized;
 
-    if (m_isMaximized) {
-        // MAXIMIZE
+    if (isMaximized) {
+        m_btnMax->setText("🗗 MIN");
         header->hide();
         controlStack->hide();
         m_instructionTableWidget->show();
         m_controlSwipeStack->show();
 
-        // ✅ FIX: Reduced Top Row (Tabs) stretch and Increased Instruction Table stretch
-        m_mainLayout->setStretch(0, 0);  // header
-        m_mainLayout->setStretch(1, 0);  // ctrlStack
-        m_mainLayout->setStretch(2, 75); // Tabs (Top Row) - Reduced
-        m_mainLayout->setStretch(3, 25); // Instruction Table - Increased!
-        m_mainLayout->setStretch(4, 0);  // Swipe controls (keeps its fixed height)
-
-        m_btnMax->setText("▼ MIN");
+        m_mainLayout->setStretch(0, 0); // Header
+        m_mainLayout->setStretch(1, 0); // Control Stack
+        m_mainLayout->setStretch(2, 5); // Tabs
+        m_mainLayout->setStretch(3, 0); // Staging Table (Fixed Height)
+        m_mainLayout->setStretch(4, 2); // Swipe Stack
     } else {
-        // MINIMIZE
+        m_btnMax->setText("⛶ MAX");
         header->show();
         controlStack->show();
         m_instructionTableWidget->hide();
         m_controlSwipeStack->hide();
 
-        m_mainLayout->setStretch(0, 10);
-        m_mainLayout->setStretch(1, 40);
-        m_mainLayout->setStretch(2, 50);
+        m_mainLayout->setStretch(0, 0);
+        m_mainLayout->setStretch(1, 0);
+        m_mainLayout->setStretch(2, 1);
         m_mainLayout->setStretch(3, 0);
         m_mainLayout->setStretch(4, 0);
-
-        m_btnMax->setText("⛶ MAX");
     }
+
+    emit maximizedToggled(isMaximized);
 }
 
-// ============================================================
-//  FIX-1a ── buildPrTableWidget  (PROGRAM FILE tab)
-//  • ScrollBar: always ON (both axes) — user can scroll all 12 cols
-//  • Default visible cols: S.No(45) | Inst(60) | Name(90) | Value(130)
-//    = 325px wide. Remaining 8 cols scroll horizontally.
-//  • Row height: 26px compact
-//  • stretchLastSection OFF — every column has explicit width
-// ============================================================
 // ============================================================
 //  buildPrTableWidget  –  PROGRAM FILE tab
 //  ✅ FIX: Generous fixed widths to force scrolling after 4 columns
@@ -480,6 +476,7 @@ QWidget* RightPanel::buildTpTableWidget()
     lay->addWidget(m_tpTable);
     return w;
 }
+
 // ============================================================
 //  buildIOModulesWidget  –  I/O PANEL tab
 // ============================================================
@@ -719,25 +716,118 @@ QWidget* RightPanel::buildAxisLimitWidget()
 }
 
 // ============================================================
-//  FIX-2 ── buildInstructionTableWidget  (staging, 20% in MAX mode)
-//  • NO title/section bar — removed entirely (was wasting ~22px)
-//  • 2px cyan top-border signals the section boundary
-//  • Header row + Data row only — zero extra margins
-//  • "INSTRUCTION" label is the first column header cell, not a bar
-//  • Fixed height = header(22) + data(26) + 2px border = 50px total
-//    (widget constrains itself; layout gives it exactly stretch=2 space)
+//  buildDxfFileWidget  –  DXF / STEP FILE tab
+//  Layout: 50% Viewer Area | 50% Controls Area
 // ============================================================
-//  buildInstructionTableWidget  –  staging row
-//  ✅ ADDED: QScrollArea and Fixed Column Widths
-// ============================================================
-// ============================================================
-//  buildInstructionTableWidget  –  staging row
-//  ✅ FIX: Increased height for more space
-// ============================================================
-// ============================================================
-//  buildInstructionTableWidget  –  staging row
-//  ✅ FIX: Removed fixed height so it can stretch dynamically
-// ============================================================
+QWidget* RightPanel::buildDxfFileWidget()
+{
+    QWidget *w = new QWidget();
+    w->setStyleSheet("background:#0d1117;");
+    QHBoxLayout *dxfLayout = new QHBoxLayout(w);
+    dxfLayout->setContentsMargins(15, 15, 15, 15);
+    dxfLayout->setSpacing(20);
+
+    // ----------------------------------------------------
+    // LEFT 50% - VIEW AREA (90%) + ORIGIN DISPLAY (10%)
+    // ----------------------------------------------------
+    QWidget *dxfViewArea = new QWidget();
+    dxfViewArea->setStyleSheet("background-color:#0a0d14; border:1px solid #1e2330; border-radius:5px;");
+    QVBoxLayout *viewLayout = new QVBoxLayout(dxfViewArea);
+    viewLayout->setContentsMargins(2, 2, 2, 2);
+    viewLayout->setSpacing(4);
+
+    m_dxfPreviewWidget = new OcctWidget(this);
+    m_dxfPreviewWidget->setViewRole(OcctWidget::SideRole);
+    viewLayout->addWidget(m_dxfPreviewWidget, 9); // Takes 90% of the height
+
+    // ✅ NEW: 10% Origin Readout at the bottom
+    QLabel *lblOrigin = new QLabel("Part Origin -> X: 0.000 | Y: -800.000 | Z: 0.000");
+    lblOrigin->setStyleSheet("color:#F59E0B; font-weight:bold; font-size:13px; background:#141820; border:1px solid #3A4460; border-radius:4px; padding:10px;");
+    lblOrigin->setAlignment(Qt::AlignCenter);
+    viewLayout->addWidget(lblOrigin, 1); // Takes 10% of the height
+
+    // ----------------------------------------------------
+    // RIGHT 50% - CONTROLS AREA
+    // ----------------------------------------------------
+    QWidget *dxfControlArea = new QWidget();
+    dxfControlArea->setStyleSheet("background:transparent; border:none;");
+    QVBoxLayout *ctrlLayout = new QVBoxLayout(dxfControlArea);
+    ctrlLayout->setContentsMargins(0, 0, 0, 0);
+    ctrlLayout->setSpacing(12);
+
+    // ✅ NEW: Selection Mode Dropdown (Face, Edge, Wire)
+    QLabel *lblMode = new QLabel("Selection Mode:");
+    lblMode->setStyleSheet("color:#00bcd4; font-weight:bold; font-size:12px;");
+
+    QComboBox *cmbSelection = new QComboBox();
+    cmbSelection->addItems({"Face (Surface)", "Edge (Line)", "Wire (Contour)"});
+    cmbSelection->setStyleSheet(
+        "QComboBox { background:#1a1e2a; color:#ffffff; border:1px solid #2a2d35; padding:8px; border-radius:4px; font-weight:bold; font-size:13px; }"
+        "QComboBox::drop-down { border:none; }"
+        );
+    // Wire the combo box to OCCT! (Index 0=Face(1), 1=Edge(2), 2=Wire(3))
+    connect(cmbSelection, &QComboBox::currentIndexChanged, this, [this](int index){
+        if (m_dxfPreviewWidget) m_dxfPreviewWidget->setSelectionMode(index + 1);
+    });
+
+    QLabel *lblDist = new QLabel("Distance (mm):");
+    lblDist->setStyleSheet("color:#00bcd4; font-weight:bold; font-size:12px;");
+
+    QLineEdit *txtDistance = new QLineEdit();
+    txtDistance->setText("2.0"); // Default value
+    txtDistance->setStyleSheet(
+        "QLineEdit { background:#1a1e2a; color:#ffffff; border:1px solid #2a2d35; "
+        "padding:10px; border-radius:4px; font-size:14px; font-family:monospace; }"
+        "QLineEdit:focus { border-color:#00bcd4; }"
+        );
+
+    m_btnGetPoints = new QPushButton("📍 GET POINTS");
+    m_btnGetPoints->setEnabled(false);
+    m_btnGetPoints->setStyleSheet("QPushButton { background-color:#2a3040; color:#64748b; font-weight:bold; padding:12px; border-radius:4px; border:none; font-size:13px; }");
+
+    QPushButton *btnRunDxf = new QPushButton("▶ RUN");
+    btnRunDxf->setStyleSheet("QPushButton { background-color:#10B981; color:#000000; font-weight:bold; padding:12px; border-radius:4px; border:none; font-size:13px; } QPushButton:hover { background-color:#059669; }");
+
+    m_txtCoordinates = new QTextEdit();
+    m_txtCoordinates->setReadOnly(true);
+    m_txtCoordinates->setPlaceholderText("Extracted XYZ coordinates will appear here...");
+    m_txtCoordinates->setStyleSheet("QTextEdit { background:#0a0d14; color:#00FF9D; border:1px solid #1e2330; border-radius:4px; padding:8px; font-family:'Consolas',monospace; font-size:12px; }");
+
+    // Add widgets to layout
+    ctrlLayout->addWidget(lblMode);
+    ctrlLayout->addWidget(cmbSelection);
+    ctrlLayout->addWidget(lblDist);
+    ctrlLayout->addWidget(txtDistance);
+    ctrlLayout->addWidget(m_btnGetPoints);
+    ctrlLayout->addWidget(btnRunDxf);
+    ctrlLayout->addWidget(m_txtCoordinates, 1);
+
+    dxfLayout->addWidget(dxfViewArea, 1);
+    dxfLayout->addWidget(dxfControlArea, 1);
+
+    // ==========================================
+    // ✅ WIRING: NO MORE POPUPS!
+    // ==========================================
+    connect(m_btnGetPoints, &QPushButton::clicked, this, [this, txtDistance, lblOrigin]() {
+        // 1. Read distance from text box (fallback to 2.0 if user left it blank)
+        double dist = txtDistance->text().toDouble();
+        if (dist <= 0.001) dist = 2.0;
+
+        // 2. Pass it directly to OCCT
+        m_dxfPreviewWidget->processCurrentSelection(dist);
+
+        // 3. Update the Origin Label to reflect true state
+        lblOrigin->setText("Part Origin -> " + m_dxfPreviewWidget->getOriginText());
+    });
+
+    // Wire coordinates output
+    connect(m_dxfPreviewWidget, &OcctWidget::coordinatesExtracted, this, [this](const QString &data) {
+        m_txtCoordinates->setPlainText(data);
+    });
+
+    return w;
+}
+
 // ============================================================
 //  buildInstructionTableWidget  –  staging row
 //  ✅ FIX: Strict fixed column widths to force exactly 5 visible
@@ -844,6 +934,7 @@ QWidget* RightPanel::buildInstructionTableWidget()
 
     return w;
 }
+
 // ============================================================
 //  buildTpCtrlWidget  –  TP CTRL (index 0 in swipe stack)
 //  ✅ FIX: 3-Row Layout with evenly distributed space
@@ -1113,6 +1204,7 @@ QWidget* RightPanel::buildPrCtrlWidget()
 
     return w;
 }
+
 // ============================================================
 //  showModifyTpDialog  –  replaces QML modifyTpPopup
 // ============================================================
@@ -1379,8 +1471,13 @@ QWidget* RightPanel::buildJointsPanel()
 {
     QWidget *panel = new QWidget(this);
     panel->setStyleSheet("background:#151822;");
-    QVBoxLayout *mainLayout = new QVBoxLayout(panel); mainLayout->setAlignment(Qt::AlignCenter);
-    QGridLayout *grid = new QGridLayout(); grid->setSpacing(8);
+
+    // ✅ Change to AlignTop so it doesn't float in the middle
+    QVBoxLayout *mainLayout = new QVBoxLayout(panel);
+    mainLayout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
+
+    QGridLayout *grid = new QGridLayout();
+    grid->setSpacing(8);
 
     QLabel *lN=new QLabel("NEG"); lN->setStyleSheet("color:#EF4444;font-weight:bold;"); lN->setAlignment(Qt::AlignCenter);
     QLabel *lB=new QLabel("BASE / WRIST"); lB->setStyleSheet("color:white;font-weight:bold;"); lB->setAlignment(Qt::AlignCenter);
@@ -1395,19 +1492,43 @@ QWidget* RightPanel::buildJointsPanel()
         QPushButton *bN=new QPushButton(QString("J%1-").arg(i)); bN->setStyleSheet(bRed);
         QLabel *lJ=new QLabel(QString("J%1").arg(i)); lJ->setStyleSheet(lblJ); lJ->setAlignment(Qt::AlignCenter);
         QPushButton *bP=new QPushButton(QString("J%1+").arg(i)); bP->setStyleSheet(bGrn);
+
         connect(bN,&QPushButton::pressed,this,[this,bN]{ if(m_backend) m_backend->handleButtonPress(bN->text()); });
         connect(bN,&QPushButton::released,this,[this,bN]{ if(m_backend) m_backend->handleButtonRelease(bN->text()); });
         connect(bP,&QPushButton::pressed,this,[this,bP]{ if(m_backend) m_backend->handleButtonPress(bP->text()); });
         connect(bP,&QPushButton::released,this,[this,bP]{ if(m_backend) m_backend->handleButtonRelease(bP->text()); });
+
         grid->addWidget(bN,i,0); grid->addWidget(lJ,i,1); grid->addWidget(bP,i,2);
     }
     mainLayout->addLayout(grid);
+    mainLayout->addStretch(); // ✅ NEW: Pushes the joints grid tightly to the top!
+
     return panel;
 }
 
 // ============================================================
 //  SLOTS
 // ============================================================
+void RightPanel::setGetPointsEnabled(bool enabled)
+{
+    if (!m_btnGetPoints) return;
+
+    m_btnGetPoints->setEnabled(enabled);
+    if (enabled) {
+        // Active state: Bright Amber
+        m_btnGetPoints->setStyleSheet(
+            "QPushButton { background-color:#F59E0B; color:#000000; font-weight:bold; "
+            "padding:12px; border-radius:4px; border:none; font-size:13px; }"
+            "QPushButton:hover { background-color:#D97706; }"
+            );
+    } else {
+        // Disabled state: Dark Grey
+        m_btnGetPoints->setStyleSheet(
+            "QPushButton { background-color:#2a3040; color:#64748b; font-weight:bold; "
+            "padding:12px; border-radius:4px; border:none; font-size:13px; }"
+            );
+    }
+}
 void RightPanel::onTelemetryChanged()
 {
     if (m_uiThrottle.elapsed() < 33) return;

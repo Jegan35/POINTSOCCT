@@ -1,22 +1,22 @@
 #ifndef LOGINDIALOG_H
 #define LOGINDIALOG_H
 
-#include <QDialog>
+#include <QWidget> // Changed from QDialog
+#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QLabel>
 #include <QButtonGroup>
 #include "ClientBackend.h"
 
-class LoginDialog : public QDialog
+class LoginDialog : public QWidget // Changed from QDialog
 {
     Q_OBJECT
-
 public:
     explicit LoginDialog(ClientBackend *backend, QWidget *parent = nullptr);
+    QString getSelectedRole();
 
 signals:
-    void accepted(); // Add this
+    void loginSuccessful(); // ✅ NEW SIGNAL: Tells MainWindow to change pages
 
 private slots:
     void handleLoginClicked();
@@ -27,17 +27,13 @@ private slots:
 
 private:
     ClientBackend *m_backend;
-
+    QLabel *errorLabel;
+    QButtonGroup *roleGroup;
     QLineEdit *ipInput;
     QLineEdit *userInput;
     QLineEdit *passInput;
-
-    QButtonGroup *roleGroup;
-    QLabel *errorLabel;
     QPushButton *btnLogin;
     QPushButton *btnDesignMode;
-
-    QString getSelectedRole();
 };
 
 #endif // LOGINDIALOG_H
