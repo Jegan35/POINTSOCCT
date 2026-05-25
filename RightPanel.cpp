@@ -306,11 +306,19 @@ void RightPanel::toggleMaximized()
         m_instructionTableWidget->show();
         m_controlSwipeStack->show();
 
-        m_mainLayout->setStretch(0, 0); // Header
-        m_mainLayout->setStretch(1, 0); // Control Stack
-        m_mainLayout->setStretch(2, 5); // Tabs
-        m_mainLayout->setStretch(3, 0); // Staging Table (Fixed Height)
-        m_mainLayout->setStretch(4, 2); // Swipe Stack
+        // 1. Header & Control Stack stay hidden (0 stretch)
+        m_mainLayout->setStretch(0, 0);
+        m_mainLayout->setStretch(1, 0);
+
+        // 2. Main Workspace Tabs take the bulk of the upper screen
+        m_mainLayout->setStretch(2, 5);
+
+        // 3. Instruction Table gets the extra space! (Increased from 1)
+        m_mainLayout->setStretch(3, 2);
+
+        // 4. Swipe Stack (bottom buttons) gets 0 stretch.
+        // This forces it to shrink down and tightly wrap your 3 rows of buttons.
+        m_mainLayout->setStretch(4, 0);
     } else {
         m_btnMax->setText("⛶ MAX");
         header->show();
@@ -1016,7 +1024,9 @@ QWidget* RightPanel::buildTpCtrlWidget()
     vl->addLayout(rowA, 1); // stretch 1
 
     // ── ROW 3: Param Setter & Status ──
-    QHBoxLayout *rowB = new QHBoxLayout(); rowB->setSpacing(4);
+    // ── ROW 3: Param Setter & Status ──
+    QHBoxLayout *rowB = new QHBoxLayout();
+    rowB->setSpacing(4);
 
     QFrame *tpApplyFr = new QFrame(w);
     tpApplyFr->setStyleSheet("QFrame { background:#0a0d14; border:1px solid #2a2d35; border-radius:4px; }");
@@ -1052,16 +1062,9 @@ QWidget* RightPanel::buildTpCtrlWidget()
     connect(btnCalc, &QPushButton::clicked, this, [this]{ if (m_backend) m_backend->calculateTrajectory(); });
     rowB->addWidget(btnCalc, 2);
 
-    QWidget *tpStatusW = new QWidget(w);
-    tpStatusW->setStyleSheet("background:#0a0d14; border:1px solid #2a2d35; border-radius:4px;");
-    QHBoxLayout *opl = new QHBoxLayout(tpStatusW); opl->setContentsMargins(0,0,0,0); opl->setSpacing(0);
-    QLabel *modeLbl = new QLabel(" MODE ");
-    modeLbl->setStyleSheet("QLabel { color:#9ca3af; font-weight:bold; font-size:9px; background:#1a1e2a; border-right:1px solid #2a2d35; padding:0 4px; border:none; }");
-    QLabel *modeVal = new QLabel("TP");
-    modeVal->setStyleSheet("QLabel { color:#4CAF50; font-weight:bold; font-size:12px; background:#0d1117; padding:0 6px; min-width:40px; border:none; }");
-    modeVal->setAlignment(Qt::AlignCenter);
-    opl->addWidget(modeLbl); opl->addWidget(modeVal, 1);
-    rowB->addWidget(tpStatusW, 2);
+    // ✅ Floating "MODE TP" widget completely removed!
+    // ✅ Replaced with empty stretch space to keep buttons aligned
+    rowB->addStretch(2);
 
     vl->addLayout(rowB, 1); // stretch 1
 

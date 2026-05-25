@@ -10,7 +10,7 @@
 StepControl::StepControl(OcctWidget* occtWidget, QWidget *parent)
     : QDialog(parent), m_occtWidget(occtWidget)
 {
-    setFixedSize(340, 320);
+   setFixedWidth(340);// Set a fixed width (slightly wider for the XYZ boxes)
     // ✅ Use Dialog instead of Popup so the File Browser doesn't accidentally close this window!
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setStyleSheet("QDialog { background-color: #141820; border: 2px solid #3A4460; border-radius: 8px; }");
@@ -18,6 +18,7 @@ StepControl::StepControl(OcctWidget* occtWidget, QWidget *parent)
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(15, 15, 15, 15);
     mainLayout->setSpacing(10);
+    mainLayout->setSizeConstraint(QLayout::SetFixedSize);
 
     QString baseBtnStyle = "QPushButton { color: #FFFFFF; font-family: 'Rajdhani','Consolas',monospace; font-weight: 800; font-size: 13px; letter-spacing: 1px; min-height: 40px; border-radius: 4px; } QPushButton:pressed { margin-top: 2px; }";
 
@@ -51,14 +52,15 @@ StepControl::StepControl(OcctWidget* occtWidget, QWidget *parent)
 
     QLabel* lblX = new QLabel("X:"); lblX->setStyleSheet("color: white; border: none;");
     m_inX = new QLineEdit("0.0"); m_inX->setStyleSheet(inputStyle); m_inX->setValidator(validator);
+    m_inX->setFixedWidth(70); // <-- ADD THIS
 
-    // Y defaults to -800.0 because that is what OcctWidget.cpp hardcodes on load!
     QLabel* lblY = new QLabel("Y:"); lblY->setStyleSheet("color: white; border: none;");
     m_inY = new QLineEdit("-800.0"); m_inY->setStyleSheet(inputStyle); m_inY->setValidator(validator);
+    m_inY->setFixedWidth(70); // <-- ADD THIS
 
     QLabel* lblZ = new QLabel("Z:"); lblZ->setStyleSheet("color: white; border: none;");
     m_inZ = new QLineEdit("0.0"); m_inZ->setStyleSheet(inputStyle); m_inZ->setValidator(validator);
-
+    m_inZ->setFixedWidth(70); // <-- ADD THIS
     xyzLayout->addWidget(lblX); xyzLayout->addWidget(m_inX);
     xyzLayout->addWidget(lblY); xyzLayout->addWidget(m_inY);
     xyzLayout->addWidget(lblZ); xyzLayout->addWidget(m_inZ);
@@ -72,7 +74,7 @@ StepControl::StepControl(OcctWidget* occtWidget, QWidget *parent)
     m_positionPanel->hide(); // Start hidden
     mainLayout->addWidget(m_positionPanel);
 
-    mainLayout->addStretch();
+
     // --- BUTTON 3: TEACH PROGRAM ---
     QPushButton* btnTeach = new QPushButton("🎓 TEACH PROGRAM");
     btnTeach->setStyleSheet(baseBtnStyle + "QPushButton { background-color: #8B5CF6; border-bottom: 4px solid #5B21B6; }");
