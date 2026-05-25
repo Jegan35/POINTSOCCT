@@ -219,6 +219,11 @@ void RightPanel::setupUI()
     m_btnMax->setStyleSheet("color:#00E5FF;background:transparent;font-weight:bold;"
                             "font-size:13px;border:none;padding:0 14px;");
     m_btnMax->setCursor(Qt::PointingHandCursor);
+
+    // ✅ FIX: Stops the MAX button from stealing keyboard focus,
+    // which prevents random menus from popping open!
+    m_btnMax->setFocusPolicy(Qt::NoFocus);
+
     m_workspaceTabs->setCornerWidget(m_btnMax, Qt::TopRightCorner);
     connect(m_btnMax, &QPushButton::clicked, this, &RightPanel::toggleMaximized);
 
@@ -294,10 +299,28 @@ void RightPanel::setupUI()
 //  In MAX mode: tabs(5) + staging(fixed 50px) + ctrl-swipe(2)
 //  staging widget has setFixedHeight so stretch=0 is correct
 // ============================================================
+// ============================================================
+//  toggleMaximized  –  MAX / MIN switch
+// ============================================================
+// ============================================================
+//  toggleMaximized  –  MAX / MIN switch
+// ============================================================
+// ============================================================
+//  toggleMaximized  –  MAX / MIN switch
+// ============================================================
 void RightPanel::toggleMaximized()
 {
+    // 🛑 FREEZE UI: Stops internal flickering
+    this->setUpdatesEnabled(false);
+
+    if (tray && !tray->isHidden()) {
+        tray->hide();
+    }
+
     static bool isMaximized = false;
     isMaximized = !isMaximized;
+
+    QWidget* dxfView = this->findChild<QWidget*>("DxfViewArea");
 
     if (isMaximized) {
         m_btnMax->setText("🗗 MIN");
@@ -305,19 +328,12 @@ void RightPanel::toggleMaximized()
         controlStack->hide();
         m_instructionTableWidget->show();
         m_controlSwipeStack->show();
+        if (dxfView) dxfView->show();
 
-        // 1. Header & Control Stack stay hidden (0 stretch)
         m_mainLayout->setStretch(0, 0);
         m_mainLayout->setStretch(1, 0);
-
-        // 2. Main Workspace Tabs take the bulk of the upper screen
         m_mainLayout->setStretch(2, 5);
-
-        // 3. Instruction Table gets the extra space! (Increased from 1)
         m_mainLayout->setStretch(3, 2);
-
-        // 4. Swipe Stack (bottom buttons) gets 0 stretch.
-        // This forces it to shrink down and tightly wrap your 3 rows of buttons.
         m_mainLayout->setStretch(4, 0);
     } else {
         m_btnMax->setText("⛶ MAX");
@@ -325,6 +341,7 @@ void RightPanel::toggleMaximized()
         controlStack->show();
         m_instructionTableWidget->hide();
         m_controlSwipeStack->hide();
+        if (dxfView) dxfView->hide();
 
         m_mainLayout->setStretch(0, 0);
         m_mainLayout->setStretch(1, 0);
@@ -333,6 +350,8 @@ void RightPanel::toggleMaximized()
         m_mainLayout->setStretch(4, 0);
     }
 
+    // 🟢 UNFREEZE UI
+    this->setUpdatesEnabled(true);
     emit maximizedToggled(isMaximized);
 }
 
@@ -723,36 +742,66 @@ QWidget* RightPanel::buildAxisLimitWidget()
     return w;
 }
 
+
+
+
+
+
 // ============================================================
 //  buildDxfFileWidget  –  DXF / STEP FILE tab
 //  Layout: 50% Viewer Area | 50% Controls Area
+// ============================================================
+// ============================================================
+//  buildDxfFileWidget  –  DXF / STEP FILE tab
 // ============================================================
 QWidget* RightPanel::buildDxfFileWidget()
 {
     QWidget *w = new QWidget();
     w->setStyleSheet("background:#0d1117;");
     QHBoxLayout *dxfLayout = new QHBoxLayout(w);
-    dxfLayout->setContentsMargins(15, 15, 15, 15);
+    dxfLayout->setContentsMargins(15, 15, 15, 10);
     dxfLayout->setSpacing(20);
 
     // ----------------------------------------------------
-    // LEFT 50% - VIEW AREA (90%) + ORIGIN DISPLAY (10%)
+    // LEFT 50% - VIEW AREA (Row 1) + ORIGIN DISPLAY (Row 2)
     // ----------------------------------------------------
     QWidget *dxfViewArea = new QWidget();
+    dxfViewArea->setObjectName("DxfViewArea"); // ✅ NEW: Name it so we can hide it later!
     dxfViewArea->setStyleSheet("background-color:#0a0d14; border:1px solid #1e2330; border-radius:5px;");
     QVBoxLayout *viewLayout = new QVBoxLayout(dxfViewArea);
-    viewLayout->setContentsMargins(2, 2, 2, 2);
-    viewLayout->setSpacing(4);
+    viewLayout->setContentsMargins(4, 4, 4, 4);
+    viewLayout->setSpacing(8);
 
+    // ROW 1: 3D Viewer
     m_dxfPreviewWidget = new OcctWidget(this);
     m_dxfPreviewWidget->setViewRole(OcctWidget::SideRole);
-    viewLayout->addWidget(m_dxfPreviewWidget, 9); // Takes 90% of the height
 
-    // ✅ NEW: 10% Origin Readout at the bottom
-    QLabel *lblOrigin = new QLabel("Part Origin -> X: 0.000 | Y: -800.000 | Z: 0.000");
-    lblOrigin->setStyleSheet("color:#F59E0B; font-weight:bold; font-size:13px; background:#141820; border:1px solid #3A4460; border-radius:4px; padding:10px;");
+    // ✅ STRICT SIZING: Prevents 3D view from blowing up the layout!
+    m_dxfPreviewWidget->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+    m_dxfPreviewWidget->setMinimumSize(50, 50);
+
+    // ROW 2: Two Origin Readouts side-by-side
+    QWidget *originContainer = new QWidget();
+    originContainer->setStyleSheet("background:transparent; border:none;");
+    QHBoxLayout *originLay = new QHBoxLayout(originContainer);
+    originLay->setContentsMargins(0, 0, 0, 0);
+    originLay->setSpacing(10);
+
+    // Box 1: Part Position Offset (Orange)
+    QLabel *lblOrigin = new QLabel("Part Offset -> X: 0.000 | Y: -800.000 | Z: 0.000");
+    lblOrigin->setStyleSheet("color:#F59E0B; font-weight:bold; font-size:12px; background:#141820; border:1px solid #3A4460; border-radius:4px; padding:6px;");
     lblOrigin->setAlignment(Qt::AlignCenter);
-    viewLayout->addWidget(lblOrigin, 1); // Takes 10% of the height
+
+    // Box 2: 3D File / Extraction Origin (Cyan)
+    QLabel *lblFileOrigin = new QLabel("3D File Origin -> X: 0.000 | Y: 0.000 | Z: 0.000");
+    lblFileOrigin->setStyleSheet("color:#00E5FF; font-weight:bold; font-size:12px; background:#141820; border:1px solid #00838F; border-radius:4px; padding:6px;");
+    lblFileOrigin->setAlignment(Qt::AlignCenter);
+
+    originLay->addWidget(lblOrigin, 1);
+    originLay->addWidget(lblFileOrigin, 1);
+
+    viewLayout->addWidget(m_dxfPreviewWidget, 1); // 3D viewer stretches
+    viewLayout->addWidget(originContainer, 0);    // Labels stay compact
 
     // ----------------------------------------------------
     // RIGHT 50% - CONTROLS AREA
@@ -764,15 +813,45 @@ QWidget* RightPanel::buildDxfFileWidget()
     ctrlLayout->setSpacing(12);
 
     // ✅ NEW: Selection Mode Dropdown (Face, Edge, Wire)
-    QLabel *lblMode = new QLabel("Selection Mode:");
-    lblMode->setStyleSheet("color:#00bcd4; font-weight:bold; font-size:12px;");
+    QLabel *lblMode = new QLabel("SELECTION MODE:");
+    lblMode->setStyleSheet("color:#00bcd4; font-weight:bold; font-size:11px; letter-spacing:1px;");
 
     QComboBox *cmbSelection = new QComboBox();
     cmbSelection->addItems({"Face (Surface)", "Edge (Line)", "Wire (Contour)"});
+
+    // The Ultimate Dark-Mode QComboBox Style
     cmbSelection->setStyleSheet(
-        "QComboBox { background:#1a1e2a; color:#ffffff; border:1px solid #2a2d35; padding:8px; border-radius:4px; font-weight:bold; font-size:13px; }"
-        "QComboBox::drop-down { border:none; }"
+        /* 1. The Main Box (Pitch Black) */
+        "QComboBox {"
+        "  background-color: #050608; color: #FFFFFF;"
+        "  border: 1px solid #2a2d35; padding: 8px 12px;"
+        "  border-radius: 4px; font-weight: bold; font-size: 13px;"
+        "}"
+        /* 2. Hover Effect */
+        "QComboBox:hover {"
+        "  border: 1px solid #00bcd4;"
+        "}"
+        /* 3. The Arrow Button Area */
+        "QComboBox::drop-down {"
+        "  border-left: 1px solid #2a2d35; width: 26px;"
+        "}"
+        /* 4. The Popup Tray Box */
+        "QComboBox QAbstractItemView {"
+        "  background-color: #0a0d14;"
+        "  color: #FFFFFF;"
+        "  border: 1px solid #00bcd4;"  // Bright border so the tray pops out
+        "  border-radius: 4px;"
+        "  selection-background-color: #00bcd4;"
+        "  selection-color: #000000;"   // Black text when hovered
+        "  outline: none;"              // Removes the ugly dotted focus line
+        "}"
+        /* 5. The Items inside the Tray */
+        "QComboBox QAbstractItemView::item {"
+        "  min-height: 32px;"           // Gives the options plenty of breathing room
+        "  padding-left: 8px;"
+        "}"
         );
+
     // Wire the combo box to OCCT! (Index 0=Face(1), 1=Edge(2), 2=Wire(3))
     connect(cmbSelection, &QComboBox::currentIndexChanged, this, [this](int index){
         if (m_dxfPreviewWidget) m_dxfPreviewWidget->setSelectionMode(index + 1);
@@ -782,7 +861,7 @@ QWidget* RightPanel::buildDxfFileWidget()
     lblDist->setStyleSheet("color:#00bcd4; font-weight:bold; font-size:12px;");
 
     QLineEdit *txtDistance = new QLineEdit();
-    txtDistance->setText("2.0"); // Default value
+    txtDistance->setText("2.0");
     txtDistance->setStyleSheet(
         "QLineEdit { background:#1a1e2a; color:#ffffff; border:1px solid #2a2d35; "
         "padding:10px; border-radius:4px; font-size:14px; font-family:monospace; }"
@@ -801,6 +880,9 @@ QWidget* RightPanel::buildDxfFileWidget()
     m_txtCoordinates->setPlaceholderText("Extracted XYZ coordinates will appear here...");
     m_txtCoordinates->setStyleSheet("QTextEdit { background:#0a0d14; color:#00FF9D; border:1px solid #1e2330; border-radius:4px; padding:8px; font-family:'Consolas',monospace; font-size:12px; }");
 
+    // ✅ FIX: Allow the text box to shrink so it NEVER pushes your buttons off the screen!
+    m_txtCoordinates->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Expanding);
+    m_txtCoordinates->setMinimumHeight(40);
     // Add widgets to layout
     ctrlLayout->addWidget(lblMode);
     ctrlLayout->addWidget(cmbSelection);
@@ -814,18 +896,17 @@ QWidget* RightPanel::buildDxfFileWidget()
     dxfLayout->addWidget(dxfControlArea, 1);
 
     // ==========================================
-    // ✅ WIRING: NO MORE POPUPS!
+    // ✅ WIRING FIX: Update new Cyan Origin box!
     // ==========================================
-    connect(m_btnGetPoints, &QPushButton::clicked, this, [this, txtDistance, lblOrigin]() {
-        // 1. Read distance from text box (fallback to 2.0 if user left it blank)
+    // Notice how we pass `lblFileOrigin` into the lambda here now!
+    connect(m_btnGetPoints, &QPushButton::clicked, this, [this, txtDistance, lblFileOrigin]() {
         double dist = txtDistance->text().toDouble();
         if (dist <= 0.001) dist = 2.0;
 
-        // 2. Pass it directly to OCCT
         m_dxfPreviewWidget->processCurrentSelection(dist);
 
-        // 3. Update the Origin Label to reflect true state
-        lblOrigin->setText("Part Origin -> " + m_dxfPreviewWidget->getOriginText());
+        // ✅ Update the NEW Cyan label with the extraction origin
+        lblFileOrigin->setText("3D File Origin -> " + m_dxfPreviewWidget->getOriginText());
     });
 
     // Wire coordinates output
@@ -835,6 +916,10 @@ QWidget* RightPanel::buildDxfFileWidget()
 
     return w;
 }
+
+
+
+
 
 // ============================================================
 //  buildInstructionTableWidget  –  staging row
@@ -973,7 +1058,7 @@ QWidget* RightPanel::buildTpCtrlWidget()
     connect(btnPrSwitch, &QPushButton::clicked, this, [this]{ m_controlSwipeStack->setCurrentIndex(1); });
 
     tl->addWidget(btnTpAct); tl->addWidget(btnPrSwitch); tl->addStretch();
-    vl->addWidget(togBar, 1); // stretch 1
+    vl->addWidget(togBar); // stretch 1
 
     // ── ROW 2: TP Action Buttons ──
     QHBoxLayout *rowA = new QHBoxLayout(); rowA->setSpacing(4);
@@ -1021,7 +1106,7 @@ QWidget* RightPanel::buildTpCtrlWidget()
     connect(btnRunTp, &QPushButton::clicked, this, [this]{ if (m_backend) m_backend->runTpPoint(); });
     rowA->addWidget(btnRunTp, 2);
 
-    vl->addLayout(rowA, 1); // stretch 1
+    vl->addLayout(rowA); // stretch 1
 
     // ── ROW 3: Param Setter & Status ──
     // ── ROW 3: Param Setter & Status ──
@@ -1066,7 +1151,7 @@ QWidget* RightPanel::buildTpCtrlWidget()
     // ✅ Replaced with empty stretch space to keep buttons aligned
     rowB->addStretch(2);
 
-    vl->addLayout(rowB, 1); // stretch 1
+    vl->addLayout(rowB); // stretch 1
 
     return w;
 }
@@ -1101,7 +1186,7 @@ QWidget* RightPanel::buildPrCtrlWidget()
     btnPrAct->setStyleSheet("QPushButton{background:#00bcd4;color:#000;font-weight:bold;border-radius:4px;padding:4px 14px;font-size:11px;border:none;}");
 
     tl->addWidget(btnTpSwitch); tl->addWidget(btnPrAct); tl->addStretch();
-    vl->addWidget(togBar, 1); // stretch 1
+    vl->addWidget(togBar); // stretch 1
 
     // ── ROW 2: Selectors ──
     QHBoxLayout *rowA = new QHBoxLayout(); rowA->setSpacing(4);
@@ -1134,7 +1219,7 @@ QWidget* RightPanel::buildPrCtrlWidget()
     connect(m_var2Sel, &QComboBox::currentTextChanged, this, [this](const QString &t){ if (m_backend) m_backend->setVariable2(t); });
     rowA->addWidget(m_var2Sel, 1);
 
-    vl->addLayout(rowA, 1); // stretch 1
+    vl->addLayout(rowA); // stretch 1
 
     // ── ROW 3: Actions & Params ──
     QHBoxLayout *rowB = new QHBoxLayout(); rowB->setSpacing(4);
@@ -1203,7 +1288,7 @@ QWidget* RightPanel::buildPrCtrlWidget()
     opl->addWidget(opLbl); opl->addWidget(m_lblOpPg, 1);
     rowB->addWidget(opPgW, 1);
 
-    vl->addLayout(rowB, 1); // stretch 1
+    vl->addLayout(rowB); // stretch 1
 
     return w;
 }

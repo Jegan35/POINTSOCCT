@@ -228,7 +228,10 @@ LeftPanel::LeftPanel(ClientBackend *backend, QWidget *parent)
 void LeftPanel::setupUI()
 {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(4, 4, 4, 4);
+
+    // ✅ FIX: Changed the bottom margin from 4 to 20.
+    // This lifts your bottom buttons safely away from the absolute bottom edge of the screen!
+    mainLayout->setContentsMargins(4, 4, 4, 20);
     mainLayout->setSpacing(2);
 
 

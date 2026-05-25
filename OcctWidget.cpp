@@ -147,9 +147,6 @@ void OcctWidget::initOCCT()
     myViewer->SetDefaultLights();
     myViewer->SetLightOn();
 
-    //myViewer->SetRectangularGridValues(0, 0, 10, 10, 0);
-    //myViewer->ActivateGrid(Aspect_GT_Rectangular, Aspect_GDM_Lines);
-
     myView = myViewer->CreateView();
 
 #if defined(Q_OS_WIN)
@@ -165,10 +162,17 @@ void OcctWidget::initOCCT()
         wind->Map();
     }
 
-    // ✅ NEW: Bright, professional CAD background so colors pop perfectly!
-    // ✅ RESTORED: Dark CAD background so metallic loaded parts do not wash out!
-    // ✅ NEW: Bright, professional CAD background so colors pop perfectly!
-    myView->SetBgGradientColors(Quantity_NOC_WHITE, Quantity_NOC_GRAY90, Aspect_GFM_VER);// background colour
+    // ==========================================
+    // ✅ FIX 1: INDEPENDENT BACKGROUND COLORS
+    // ==========================================
+    if (myRole == MainRole) {
+        // Left Panel gets the bright, professional gradient
+        myView->SetBgGradientColors(Quantity_NOC_WHITE, Quantity_NOC_GRAY90, Aspect_GFM_VER);
+    } else {
+        // Right Panel gets the pure Black Screen Box!
+        myView->SetBackgroundColor(Quantity_NOC_BLACK);
+    }
+
     myContext = new AIS_InteractiveContext(myViewer);
 
     // Hardware Anti-Aliasing for smooth lines
@@ -176,7 +180,7 @@ void OcctWidget::initOCCT()
     myView->ChangeRenderingParams().NbMsaaSamples = 8;
 
     // ==========================================
-    // ✅ FIX: ADD THE VIEW CUBE *ONLY* TO THE LEFT WIDGET
+    // ✅ FIX 2: ISOLATE THE GRID AND VIEWCUBE
     // ==========================================
     if (myRole == MainRole) {
         Handle(AIS_ViewCube) viewCube = new AIS_ViewCube();
@@ -186,10 +190,6 @@ void OcctWidget::initOCCT()
         viewCube->SetFontHeight(12);
         viewCube->SetAxesLabels("X", "Y", "Z");
 
-        // ==========================================
-        // ✅ THE FIX: SET ANIMATION DURATION TO ZERO
-        // This stops the camera from getting "stuck" trying to animate!
-        // ==========================================
         Handle(Graphic3d_TransformPers) trsfPers = new Graphic3d_TransformPers(
             Graphic3d_TMF_TriedronPers,
             Aspect_TOTP_RIGHT_UPPER,
@@ -197,11 +197,11 @@ void OcctWidget::initOCCT()
             );
         viewCube->SetTransformPersistence(trsfPers);
         myContext->Display(viewCube, Standard_False);
-    }
-    // ==========================================
 
-    // Draw your custom 3-wall grid
-    drawRoomGrid();
+        // ✅ ONLY draw the giant 4000x4000 room grid if this is the Main Left Panel!
+        // This stops the Right Panel from doing a massive "FitAll" zoom jerk!
+        drawRoomGrid();
+    }
 }
 
 void OcctWidget::loadStepFile(const std::string& filePath)

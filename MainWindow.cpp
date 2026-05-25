@@ -34,11 +34,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
                     "QSplitter::handle { background-color: #1E1E1E; width: 4px; }");
 
                 // 3. Build Panels
+                // 3. Build Panels
                 this->leftPanel  = new LeftPanel (this->m_backend, this->mainSplitter);
                 this->rightPanel = new RightPanel(this->m_backend, this->mainSplitter);
 
-                this->leftPanel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-                this->rightPanel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+                // ✅ THE ULTIMATE SPLITTER FIX:
+                // Changing "Expanding" to "Ignored" horizontally forces both panels
+                // to surrender to the QSplitter. The giant tables can no longer break the 50/50 split!
+                this->leftPanel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Expanding);
+                this->rightPanel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Expanding);
+
+                this->leftPanel->setMinimumWidth(200);
+                this->rightPanel->setMinimumWidth(200);
 
                 this->mainSplitter->addWidget(this->leftPanel);
                 this->mainSplitter->addWidget(this->rightPanel);
@@ -67,14 +74,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
                 connect(this->leftPanel,  &LeftPanel::requestTabChange,
                         this->rightPanel, &RightPanel::setActiveTab);
 
-                // 6. Connect the "MAX" button toggle to cleanly refresh the layout
-                // Make sure `maximizedToggled(bool)` is declared in RightPanel.h!
-                connect(this->rightPanel, &RightPanel::maximizedToggled,
-                        this, [this](bool) {
-                            QList<int> currentSizes = this->mainSplitter->sizes();
-                            int total = currentSizes[0] + currentSizes[1];
-                            this->mainSplitter->setSizes({total / 2, total / 2});
-                        });
             });
 
     this->setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
