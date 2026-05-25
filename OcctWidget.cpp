@@ -354,7 +354,11 @@ void OcctWidget::processCurrentSelection(double resolution)
 {
     if (myContext.IsNull() || !myContext->HasSelectedShape()) return;
 
-    // ❌ WE COMPLETELY DELETED THE QInputDialog POPUP HERE! ❌
+    // ✅ THE FIX: Clear previous red lines so ONLY the new selection is red!
+    // (If you ever DO want to select multiple, just hold the SHIFT key on your keyboard)
+    if (!(QApplication::keyboardModifiers() & Qt::ShiftModifier)) {
+        clearSelections();
+    }
 
     myContext->InitSelected();
     int addedCount = 0;
@@ -369,7 +373,6 @@ void OcctWidget::processCurrentSelection(double resolution)
         Handle(AIS_Shape) plottedPath = new AIS_Shape(shape);
         myContext->SetColor(plottedPath, Quantity_NOC_RED, Standard_False);
 
-        // ✅ FIX 3: If you clicked a FACE, tell OCCT to shade the whole face Red, not just the edges.
         if (shape.ShapeType() == TopAbs_FACE) {
             myContext->SetDisplayMode(plottedPath, 1, Standard_False);
         } else {
