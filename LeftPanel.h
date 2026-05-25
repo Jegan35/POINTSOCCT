@@ -51,6 +51,7 @@ private:
     QLabel *lblXYZ;
     QLabel *lblABC;
     QLabel *m_lblJoints[6];
+    QVBoxLayout *m_mainLayout = nullptr;
     QStackedWidget *footerStack;
 
     QPushButton *m_btnServo;

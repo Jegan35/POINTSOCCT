@@ -35,7 +35,6 @@
 #endif
 
 #include <Aspect_DisplayConnection.hxx>
-#include <STEPControl_Reader.hxx>
 #include <AIS_Shape.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopoDS.hxx>
@@ -59,7 +58,12 @@
 #include <Graphic3d_TransformPers.hxx>
 #include <AIS_TextLabel.hxx>
 #include <TCollection_ExtendedString.hxx>
-
+#include <STEPCAFControl_Reader.hxx>
+#include <XCAFApp_Application.hxx>
+#include <TDocStd_Document.hxx>
+#include <XCAFDoc_DocumentTool.hxx>
+#include <XCAFDoc_ShapeTool.hxx>
+#include <TDF_LabelSequence.hxx>
 
 // ✅ ADD THE MISSING GRID HEADERS HERE:
 #include <TopoDS_Compound.hxx>
@@ -207,42 +211,60 @@ void OcctWidget::initOCCT()
 void OcctWidget::loadStepFile(const std::string& filePath)
 {
     if (myView.IsNull()) initOCCT();
-
-    // ❌ REMOVED: myContext->RemoveAll(Standard_True); <-- So the robot stays on screen!
     clearSelections();
 
-    STEPControl_Reader reader;
+    // 1. Initialize XDE Document (Required for CAF)
+    Handle(TDocStd_Document) aDoc;
+    Handle(XCAFApp_Application) anApp = XCAFApp_Application::GetApplication();
+    anApp->NewDocument("MDTV-XCAF", aDoc);
+
+    // 2. Read the file
+    STEPCAFControl_Reader reader;
+    reader.SetColorMode(Standard_True); // Ensure colors are imported
+    reader.SetNameMode(Standard_True);  // Ensure names are imported
+
     IFSelect_ReturnStatus stat = reader.ReadFile(filePath.c_str());
 
     if (stat == IFSelect_RetDone) {
-        reader.TransferRoots();
-        TopoDS_Shape shape = reader.OneShape();
+        reader.Transfer(aDoc);
 
-        // Save it to our new memory variable
-        myLoadedPart = new AIS_Shape(shape);
-        myContext->SetDisplayMode(myLoadedPart, 1, Standard_False);
+        // 3. Get the top-level shape tool
+        Handle(XCAFDoc_ShapeTool) aShapeTool = XCAFDoc_DocumentTool::ShapeTool(aDoc->Main());
+        TDF_LabelSequence labels;
+        aShapeTool->GetFreeShapes(labels);
+        if (labels.Length() > 0) {
+            TDF_Label aLabel = labels.Value(1);
 
-        // Give the workpiece a distinct color so it doesn't blend with the grey robot
-        myContext->SetColor(myLoadedPart, Quantity_NOC_AZURE, Standard_False);
-        myContext->Display(myLoadedPart, Standard_True);
+            // 4. Create the XCAFPrs_AISObject (This maps colors/names automatically)
+            myLoadedPart = new XCAFPrs_AISObject(aLabel);
 
-        // ✅ CRITICAL FIX: Hard-lock the extraction origin to the Robot Base (0,0,0)
-        myCustomOrigin = gp_Pnt(0.0, 0.0, 0.0);
+            // ✅ THE FIX: Force the 3D model to be Solid/Shaded (Mode 1)!
+            // Without this line, OCCT defaults to Wireframe/Transparent (Mode 0).
+            myContext->SetDisplayMode(myLoadedPart, 1, Standard_False);
 
-        // ✅ NEW: Automatically push the part forward by 300mm on the X axis!
-        // If your "forward" direction is actually the Y axis, change this to (0.0, 300.0, 0.0)
-        offsetWorkpiece(.0, -800.0, 0.0);
+            // 5. Display the object
+            myContext->Display(myLoadedPart, Standard_True);
 
-        myView->FitAll();
-        myView->Redraw();
-        setSelectionMode(myCurrentSelectionMode);
+            // 6. Setup your origin and positioning
+            myCustomOrigin = gp_Pnt(0.0, 0.0, 0.0);
+            offsetWorkpiece(.0, -800.0, 0.0);
 
-        emit statusUpdate("✅ Workpiece Loaded and Automatically pushed 300mm forward.");
+            // Only fit the camera if this is the SideRole (DXF view)
+            if (myRole == OcctWidget::SideRole) {
+                myView->FitAll();
+                myView->Redraw();
+            } else {
+                myView->Redraw(); // Ensure the main view repaints!
+            }
+
+            setSelectionMode(myCurrentSelectionMode);
+
+            emit statusUpdate("✅ Workpiece Loaded (Solid & Colored).");
+        }
     } else {
-        emit statusUpdate("❌ Error: Failed to load STEP file.");
+        emit statusUpdate("❌ Error: Failed to load STEP file via XDE.");
     }
 }
-
 void OcctWidget::resetOrigin()
 {
     if (myOriginMarker.IsNull()) {
@@ -395,13 +417,15 @@ void OcctWidget::processCurrentSelection(double resolution)
 
         myContext->NextSelected();
     }
-
     myContext->ClearSelected(Standard_True);
     myRedoStack.clear();
 
     emit coordinatesExtracted(xyzData);
     regenerateCSV();
     emit statusUpdate(QString("✅ Extracted %1 new path(s). Total Paths in CSV: %2").arg(addedCount).arg(myPathHistory.size()));
+
+    // ✅ ADD THIS LINE: Tells the UI to disable the "GET POINTS" button again
+    emit selectionChanged(false);
 }
 
 void OcctWidget::regenerateCSV()
@@ -573,8 +597,9 @@ void OcctWidget::mousePressEvent(QMouseEvent *event)
                 myContext->ClearSelected(Standard_True);
             }
             else if (myRole == SideRole) {
-                // Right Window: Trigger YOUR exact extraction function!
-                processCurrentSelection(2.0);
+                // ✅ FIX: Don't extract immediately! Just notify the UI that a shape is selected.
+                // The user must click "GET POINTS" to actually calculate the math.
+                emit selectionChanged(myContext->HasSelectedShape());
             }
         }
     }
@@ -733,6 +758,8 @@ void OcctWidget::loadNextRobotLink()
     }
 
     std::string stdFile = fileName.toStdString();
+
+    // ✅ FIX: STL files are already meshed, they do not take a deflection argument!
     Handle(Poly_Triangulation) mesh = RWStl::ReadFile(stdFile.c_str());
 
     if (!mesh.IsNull()) {
@@ -1061,14 +1088,16 @@ void OcctWidget::showEvent(QShowEvent *event)
     });
 }
 
-void OcctWidget::clearLoadedPart() {
+void OcctWidget::clearLoadedPart()
+{
     if (!myLoadedPart.IsNull()) {
         myContext->Remove(myLoadedPart, Standard_True);
         myLoadedPart.Nullify();
-        emit statusUpdate("🗑️ STEP/DXF file cleared from view.");
+        emit statusUpdate("🗑️ STEP file cleared from view.");
         myView->Redraw();
     }
 }
+
 QString OcctWidget::getOriginText() const {
     return QString("X: %1 | Y: %2 | Z: %3")
     .arg(myCustomOrigin.X(), 0, 'f', 3)

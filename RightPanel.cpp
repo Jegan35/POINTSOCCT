@@ -766,8 +766,12 @@ QWidget* RightPanel::buildDxfFileWidget()
     // LEFT 50% - VIEW AREA (Row 1) + ORIGIN DISPLAY (Row 2)
     // ----------------------------------------------------
     QWidget *dxfViewArea = new QWidget();
-    dxfViewArea->setObjectName("DxfViewArea"); // ✅ NEW: Name it so we can hide it later!
+    dxfViewArea->setObjectName("DxfViewArea");
     dxfViewArea->setStyleSheet("background-color:#0a0d14; border:1px solid #1e2330; border-radius:5px;");
+
+    // ✅ FIX 1: Prevent this container from expanding horizontally past 50%
+    dxfViewArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
     QVBoxLayout *viewLayout = new QVBoxLayout(dxfViewArea);
     viewLayout->setContentsMargins(4, 4, 4, 4);
     viewLayout->setSpacing(8);
@@ -776,32 +780,36 @@ QWidget* RightPanel::buildDxfFileWidget()
     m_dxfPreviewWidget = new OcctWidget(this);
     m_dxfPreviewWidget->setViewRole(OcctWidget::SideRole);
 
-    // ✅ STRICT SIZING: Prevents 3D view from blowing up the layout!
+    // ✅ FIX 2: Muzzle the 3D widget's size demands
     m_dxfPreviewWidget->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     m_dxfPreviewWidget->setMinimumSize(50, 50);
 
     // ROW 2: Two Origin Readouts side-by-side
     QWidget *originContainer = new QWidget();
     originContainer->setStyleSheet("background:transparent; border:none;");
+    // ✅ FIX 3: Lock the height of the origin readouts so they don't stretch
+    originContainer->setFixedHeight(40);
+
     QHBoxLayout *originLay = new QHBoxLayout(originContainer);
     originLay->setContentsMargins(0, 0, 0, 0);
     originLay->setSpacing(10);
 
     // Box 1: Part Position Offset (Orange)
     QLabel *lblOrigin = new QLabel("Part Offset -> X: 0.000 | Y: -800.000 | Z: 0.000");
-    lblOrigin->setStyleSheet("color:#F59E0B; font-weight:bold; font-size:12px; background:#141820; border:1px solid #3A4460; border-radius:4px; padding:6px;");
+    lblOrigin->setStyleSheet("color:#F59E0B; font-weight:bold; font-size:11px; background:#141820; border:1px solid #3A4460; border-radius:4px; padding:6px;");
     lblOrigin->setAlignment(Qt::AlignCenter);
 
     // Box 2: 3D File / Extraction Origin (Cyan)
     QLabel *lblFileOrigin = new QLabel("3D File Origin -> X: 0.000 | Y: 0.000 | Z: 0.000");
-    lblFileOrigin->setStyleSheet("color:#00E5FF; font-weight:bold; font-size:12px; background:#141820; border:1px solid #00838F; border-radius:4px; padding:6px;");
+    lblFileOrigin->setStyleSheet("color:#00E5FF; font-weight:bold; font-size:11px; background:#141820; border:1px solid #00838F; border-radius:4px; padding:6px;");
     lblFileOrigin->setAlignment(Qt::AlignCenter);
 
     originLay->addWidget(lblOrigin, 1);
     originLay->addWidget(lblFileOrigin, 1);
 
-    viewLayout->addWidget(m_dxfPreviewWidget, 1); // 3D viewer stretches
-    viewLayout->addWidget(originContainer, 0);    // Labels stay compact
+    // ✅ FIX 4: Explicit vertical stretches (1 for 3D, 0 for bottom bar)
+    viewLayout->addWidget(m_dxfPreviewWidget, 1);
+    viewLayout->addWidget(originContainer, 0);// Labels stay compact
 
     // ----------------------------------------------------
     // RIGHT 50% - CONTROLS AREA
@@ -884,6 +892,7 @@ QWidget* RightPanel::buildDxfFileWidget()
     m_txtCoordinates->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Expanding);
     m_txtCoordinates->setMinimumHeight(40);
     // Add widgets to layout
+    // Add widgets to layout
     ctrlLayout->addWidget(lblMode);
     ctrlLayout->addWidget(cmbSelection);
     ctrlLayout->addWidget(lblDist);
@@ -892,8 +901,11 @@ QWidget* RightPanel::buildDxfFileWidget()
     ctrlLayout->addWidget(btnRunDxf);
     ctrlLayout->addWidget(m_txtCoordinates, 1);
 
+    // ✅ FIX 5: Explicit horizontal stretches (Exactly 50/50)
     dxfLayout->addWidget(dxfViewArea, 1);
     dxfLayout->addWidget(dxfControlArea, 1);
+
+    // ... (Keep the rest of your wiring connections the same)
 
     // ==========================================
     // ✅ WIRING FIX: Update new Cyan Origin box!
@@ -910,13 +922,18 @@ QWidget* RightPanel::buildDxfFileWidget()
     });
 
     // Wire coordinates output
+    // Wire coordinates output
     connect(m_dxfPreviewWidget, &OcctWidget::coordinatesExtracted, this, [this](const QString &data) {
         m_txtCoordinates->setPlainText(data);
     });
 
+    // ✅ ADD THIS BLOCK: Enables the GET POINTS button when you click a line/face
+    connect(m_dxfPreviewWidget, &OcctWidget::selectionChanged, this, [this](bool hasSelection) {
+        this->setGetPointsEnabled(hasSelection);
+    });
+
     return w;
 }
-
 
 
 

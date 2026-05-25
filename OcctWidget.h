@@ -19,7 +19,7 @@
 #include <TopoDS_Face.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <Prs3d_Drawer.hxx>
-
+#include <XCAFPrs_AISObject.hxx>
 #include <AIS_Trihedron.hxx>
 #include <Geom_Axis2Placement.hxx>
 #include <AIS_Shape.hxx>
@@ -110,7 +110,7 @@ private:
     Handle(OpenGl_GraphicDriver) myGraphicDriver;
 
     // Remembers the loaded table/workpiece so we can offset it
-    Handle(AIS_Shape) myLoadedPart;
+    Handle(XCAFPrs_AISObject) myLoadedPart;
     std::vector<Handle(AIS_InteractiveObject)> myRobotLinks;
     QPoint myLastMousePos;
 

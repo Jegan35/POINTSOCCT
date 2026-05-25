@@ -12,50 +12,35 @@
 #include <cmath>
 #include "StepControl.h"
 // ─────────────────────────────────────────────────────────────────────────────
-//  DESIGN SYSTEM  –  Professional Robotics HMI Palette (HIGH VISIBILITY)
+//  DESIGN SYSTEM
 // ─────────────────────────────────────────────────────────────────────────────
 namespace DS {
 
-// Panel chrome (Kept dark to make the bright buttons pop)
 static const char* PANEL_BG        = "#0D0F14";
-static const char* SURFACE_1       = "#141820";   // card / header fills
-static const char* SURFACE_2       = "#1C2130";   // elevated surface
-static const char* BORDER_DIM      = "#252C3E";
-static const char* BORDER_BRIGHT   = "#495880";   // Lightened border for crispness
+static const char* CYAN_BRIGHT     = "#00E5FF";
+static const char* CYAN_DIM        = "#00A3CC";
+static const char* GREEN_BRIGHT    = "#00FF9D";
+static const char* GREEN_DIM       = "#00B36E";
+static const char* AMBER_BRIGHT    = "#FFC107";
+static const char* AMBER_DIM       = "#D97706";
+static const char* RED_BRIGHT      = "#FF4444";
+static const char* RED_DIM         = "#CC1111";
+static const char* BLUE_BRIGHT     = "#4D9BFF";
+static const char* BLUE_DIM        = "#1D66D6";
+static const char* VIOLET_BRIGHT   = "#A855F7";
+static const char* VIOLET_DIM      = "#7E22CE";
+static const char* SLATE           = "#64748B";
+static const char* SLATE_DIM       = "#475569";
+static const char* EMERALD_BRIGHT  = "#10DC8E";
+static const char* EMERALD_DIM     = "#059669";
+static const char* TEXT_PRIMARY    = "#FFFFFF";
+static const char* TEXT_SECONDARY  = "#A0AEC0";
 
-// Accent palette (Brightened Base & Vibrant Shadows)
-static const char* CYAN_BRIGHT     = "#00E5FF";   // Neon Cyan
-static const char* CYAN_DIM        = "#00A3CC";   // Rich Teal shadow (not dark)
-static const char* GREEN_BRIGHT    = "#00FF9D";   // Fluorescent Green
-static const char* GREEN_DIM       = "#00B36E";   // Vibrant Emerald shadow
-static const char* AMBER_BRIGHT    = "#FFC107";   // Bright Warning Yellow/Amber
-static const char* AMBER_DIM       = "#D97706";   // Rich Orange shadow
-static const char* RED_BRIGHT      = "#FF4444";   // Alert Red
-static const char* RED_DIM         = "#CC1111";   // Deep Crimson shadow
-static const char* BLUE_BRIGHT     = "#4D9BFF";   // Electric Blue
-static const char* BLUE_DIM        = "#1D66D6";   // Royal Blue shadow
-static const char* VIOLET_BRIGHT   = "#A855F7";   // Bright Violet
-static const char* VIOLET_DIM      = "#7E22CE";   // Deep Purple shadow
-static const char* SLATE           = "#64748B";   // Lighter Slate (Off state)
-static const char* SLATE_DIM       = "#475569";   // Slate shadow
-static const char* EMERALD_BRIGHT  = "#10DC8E";   // High-vis Emerald
-static const char* EMERALD_DIM     = "#059669";   // Rich Green shadow
-
-// Text
-static const char* TEXT_PRIMARY    = "#FFFFFF";   // Pure White for max contrast
-static const char* TEXT_SECONDARY  = "#A0AEC0";   // Lighter secondary text
-
-// ── Common font style for all action buttons ──────────────────────────────
-// ✅ PURE WHITE, EXTRA BOLD (900), slightly larger text for instant readability
 static const QString BTN_FONT =
     "color: #FFFFFF; font-family: 'Rajdhani', 'Consolas', monospace; "
     "font-weight: 900; font-size: 14px; letter-spacing: 1.5px; "
     "min-height: 48px; border-radius: 4px; ";
 
-// ── Generates a raised "lit-edge" button stylesheet ──────────────────────
-//    topColor   = face colour
-//    rimColor   = bottom edge shadow (darker than face)
-//    glowColor  = top/left 1-px highlight (lighter than face)
 static QString raisedBtn(const QString& topColor,
                          const QString& rimColor,
                          const QString& glowColor = "#FFFFFF18")
@@ -71,7 +56,6 @@ static QString raisedBtn(const QString& topColor,
                "}"
                "QPushButton:hover {"
                "  background-color: %1;"
-               "  filter: brightness(1.12);"
                "}"
                "QPushButton:pressed {"
                "  border-bottom: 1px solid %2;"
@@ -86,40 +70,37 @@ static QString raisedBtn(const QString& topColor,
                ).arg(topColor, rimColor, glowColor, DS::BTN_FONT);
 }
 
-// Convenience wrappers for each semantic colour
-inline QString btnOff()     { return raisedBtn(DS::SLATE,          "#1E293B", "#FFFFFF20"); } // Lighter dark-rim
+inline QString btnOff()     { return raisedBtn(DS::SLATE,          "#1E293B", "#FFFFFF20"); }
 inline QString btnHome()    { return raisedBtn(DS::BLUE_BRIGHT,    DS::BLUE_DIM); }
 inline QString btnRun()     { return raisedBtn(DS::EMERALD_BRIGHT, DS::EMERALD_DIM); }
 inline QString btnPause()   { return raisedBtn(DS::AMBER_BRIGHT,   DS::AMBER_DIM); }
 inline QString btnStart()   { return raisedBtn(DS::SLATE,          DS::SLATE_DIM); }
 inline QString btnStop()    { return raisedBtn(DS::RED_BRIGHT,     DS::RED_DIM); }
-inline QString btnExit()    { return raisedBtn("#FF2A2A",          "#B31212"); } // Neon Crimson
+inline QString btnExit()    { return raisedBtn("#FF2A2A",          "#B31212"); }
 inline QString btnSim()     { return raisedBtn(DS::VIOLET_BRIGHT,  DS::VIOLET_DIM); }
-inline QString btnReal()    { return raisedBtn("#FF8C00",          "#B35F00"); } // Neon Orange
+inline QString btnReal()    { return raisedBtn("#FF8C00",          "#B35F00"); }
 inline QString btnOK()      { return raisedBtn(DS::EMERALD_BRIGHT, DS::GREEN_DIM); }
 inline QString btnError()   { return raisedBtn(DS::RED_BRIGHT,     DS::RED_DIM); }
-inline QString btnErrClr()  { return raisedBtn("#FF3366",          "#CC1133"); } // Neon Rose-Red
+inline QString btnErrClr()  { return raisedBtn("#FF3366",          "#CC1133"); }
 inline QString btnMrkClr()  { return raisedBtn(DS::AMBER_BRIGHT,   DS::AMBER_DIM); }
-inline QString btnReset()   { return raisedBtn("#FF5555",          "#CC2222"); } // Bright Coral Red
-inline QString btnSpeed()   { return raisedBtn("#00BFFF",          "#007A99"); } // Deep Sky Blue
+inline QString btnReset()   { return raisedBtn("#FF5555",          "#CC2222"); }
 inline QString btnFiles()   { return raisedBtn(DS::VIOLET_BRIGHT,  DS::VIOLET_DIM); }
-inline QString btnTools()   { return raisedBtn("#FF007F",          "#B30059"); } // Neon Pink
+inline QString btnTools()   { return raisedBtn("#FF007F",          "#B30059"); }
 
 inline QString btnAction()  {
     return "QPushButton {"
            "  background-color: #1C2130;"
-           "  color: #FFFFFF;" // Changed to Pure White for high visibility
+           "  color: #FFFFFF;"
            "  font-family: 'Rajdhani','Consolas',monospace;"
            "  font-weight: 800; font-size: 13px; letter-spacing: 1px;"
            "  min-height: 44px; border-radius: 4px;"
-           "  border: 1px solid #3A4460;" // Brightened border
+           "  border: 1px solid #3A4460;"
            "  border-bottom: 3px solid #0D0F14;"
            "}"
-           "QPushButton:hover { background-color: #252C3E; color: #00E5FF; }" // Glows neon cyan on hover
+           "QPushButton:hover { background-color: #252C3E; color: #00E5FF; }"
            "QPushButton:pressed { border-bottom: 1px solid #0D0F14; border-top: 3px solid #0D0F14; margin-top: 2px; }";
 }
 
-// Label box styles
 inline QString darkBox() {
     return "QLabel {"
            "  background-color: #141820;"
@@ -141,7 +122,6 @@ inline QString prBox() {
            "}";
 }
 
-// Joint label style  ── original bright-cyan fill, black text (matches old code)
 inline QString jointLbl() {
     return "QLabel {"
            "  background-color: #00BFFF;"
@@ -153,7 +133,6 @@ inline QString jointLbl() {
            "}";
 }
 
-// Coord label style  ── original bright-cyan fill, black text (matches old code)
 inline QString coordLbl(int pxSize = 15) {
     return QString(
                "QLabel {"
@@ -167,7 +146,6 @@ inline QString coordLbl(int pxSize = 15) {
                ).arg(pxSize);
 }
 
-// Joint header  ── original bright-cyan fill, black text (matches old code)
 inline QString jointHeader() {
     return "QLabel {"
            "  background-color: #00BFFF;"
@@ -179,7 +157,6 @@ inline QString jointHeader() {
            "}";
 }
 
-// AXIS GFX side label  ── original bright-cyan fill, black text (matches old code)
 inline QString axisLbl() {
     return "QLabel {"
            "  background-color: #00BFFF;"
@@ -191,7 +168,6 @@ inline QString axisLbl() {
            "}";
 }
 
-// Speed indicator badge
 inline QString speedBadge() {
     return "QLabel {"
            "  background-color: #0C1020;"
@@ -227,37 +203,34 @@ LeftPanel::LeftPanel(ClientBackend *backend, QWidget *parent)
 // ─────────────────────────────────────────────────────────────────────────────
 void LeftPanel::setupUI()
 {
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    // ── Root layout for LeftPanel ──────────────────────────────────
+    // Declared as local — topArea + footerStack are added directly.
+    // NEVER reassign this pointer inside lambdas or button handlers!
+    QVBoxLayout *rootLayout = new QVBoxLayout(this);
+    rootLayout->setContentsMargins(4, 4, 4, 20);
+    rootLayout->setSpacing(2);
 
-    // ✅ FIX: Changed the bottom margin from 4 to 20.
-    // This lifts your bottom buttons safely away from the absolute bottom edge of the screen!
-    mainLayout->setContentsMargins(4, 4, 4, 20);
-    mainLayout->setSpacing(2);
+    // ══════════════════════════════════════════════════════════════
+    //  TOP AREA — 3D view + joints + coord readouts
+    //  stretch=1 → takes ALL space not claimed by the footer
+    // ══════════════════════════════════════════════════════════════
+    QWidget *topArea = new QWidget(this);
+    topArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
+    QVBoxLayout *topAreaLayout = new QVBoxLayout(topArea);
+    topAreaLayout->setContentsMargins(0, 0, 0, 0);
+    topAreaLayout->setSpacing(2);
 
-    // ══════════════════════════════════════════════════════════════
-    //  MIDDLE: 3D Canvas (left) + Joint readouts (right)
-    // ══════════════════════════════════════════════════════════════
-    // ══════════════════════════════════════════════════════════════
-    //  MIDDLE: 3D Canvas (left) + Joint readouts (right)
-    // ══════════════════════════════════════════════════════════════
-    // ══════════════════════════════════════════════════════════════
-    //  MIDDLE: 3D Canvas (left) + Joint readouts (right)
-    // ══════════════════════════════════════════════════════════════
+    // ── 3D Canvas (80%) + Joint column (20%) ──────────────────────
     QHBoxLayout *midLayout = new QHBoxLayout();
     midLayout->setSpacing(6);
 
-    QFrame *occtContainer = new QFrame(this);
+    QFrame *occtContainer = new QFrame(topArea);
     occtContainer->setObjectName("occtContainer");
-    occtContainer->setStyleSheet("#occtContainer { background-color: #08090E; border: 1px solid #007A99; border-radius: 3px; }");
-
-    // ✅ THE STRICT LAYOUT FIX:
-    // "Expanding" forces the Left Panel to demand exactly 50% of the screen.
-    // "setMinimumSize" completely destroys OpenCASCADE's massive native
-    // size hint so it can NEVER push your bottom buttons off the screen again!
+    occtContainer->setStyleSheet(
+        "#occtContainer { background-color: #08090E; border: 1px solid #007A99; border-radius: 3px; }");
     occtContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     occtContainer->setMinimumSize(100, 100);
-
     occtContainer->setAttribute(Qt::WA_NativeWindow);
 
     QVBoxLayout *containerLay = new QVBoxLayout(occtContainer);
@@ -266,57 +239,56 @@ void LeftPanel::setupUI()
 
     myMainWidget = new OcctWidget(occtContainer);
     myMainWidget->setViewRole(OcctWidget::MainRole);
-
-    // Apply the exact same strict rules to the native widget itself
     myMainWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     myMainWidget->setMinimumSize(100, 100);
-
     containerLay->addWidget(myMainWidget);
-    midLayout->addWidget(occtContainer, 4);
 
-    connect(myMainWidget, &OcctWidget::selectionChanged, this, &LeftPanel::partSelectionStateChanged);
+    midLayout->addWidget(occtContainer, 4);  // 80%
+
+    connect(myMainWidget, &OcctWidget::selectionChanged,
+            this, &LeftPanel::partSelectionStateChanged);
 
     // ── Joint column ──────────────────────────────────────────────
     QVBoxLayout *jointLayout = new QVBoxLayout();
     jointLayout->setSpacing(3);
 
-    QLabel *jHeader = new QLabel("JOINTS", this);
+    QLabel *jHeader = new QLabel("JOINTS", topArea);
     jHeader->setStyleSheet(DS::jointHeader());
     jHeader->setAlignment(Qt::AlignCenter);
     jointLayout->addWidget(jHeader);
 
     for (int i = 0; i < 6; i++) {
-        m_lblJoints[i] = new QLabel(QString("J%1\n0.000°").arg(i + 1), this);
+        m_lblJoints[i] = new QLabel(QString("J%1\n0.000°").arg(i + 1), topArea);
         m_lblJoints[i]->setStyleSheet(DS::jointLbl());
         m_lblJoints[i]->setAlignment(Qt::AlignCenter);
         jointLayout->addWidget(m_lblJoints[i]);
     }
-    midLayout->addLayout(jointLayout, 1);
-    mainLayout->addLayout(midLayout, 6);
+    midLayout->addLayout(jointLayout, 1);    // 20%
 
-    // ══════════════════════════════════════════════════════════════
-    //  BOTTOM 1: Coordinate readouts
-    // ══════════════════════════════════════════════════════════════
+    // ── Coordinate readouts ───────────────────────────────────────
     QHBoxLayout *coordLayout = new QHBoxLayout();
     coordLayout->setSpacing(4);
 
-    QLabel *lblAxis = new QLabel("AXIS\nGFX", this);
+    QLabel *lblAxis = new QLabel("AXIS\nGFX", topArea);
     lblAxis->setStyleSheet(DS::axisLbl());
     lblAxis->setAlignment(Qt::AlignCenter);
     coordLayout->addWidget(lblAxis, 1);
 
-    lblXYZ = new QLabel("X  0.000 mm\nY  0.000 mm\nZ  0.000 mm", this);
+    lblXYZ = new QLabel("X  0.000 mm\nY  0.000 mm\nZ  0.000 mm", topArea);
     lblXYZ->setStyleSheet(DS::coordLbl(15));
     coordLayout->addWidget(lblXYZ, 2);
 
-    lblABC = new QLabel("A  0.000 °\nB  0.000 °\nC  0.000 °", this);
+    lblABC = new QLabel("A  0.000 °\nB  0.000 °\nC  0.000 °", topArea);
     lblABC->setStyleSheet(DS::coordLbl(15));
     coordLayout->addWidget(lblABC, 2);
 
-    mainLayout->addLayout(coordLayout, 0);
+    topAreaLayout->addLayout(midLayout,   1);   // 3D view expands
+    topAreaLayout->addLayout(coordLayout, 0);   // coord bar compact
+
+    rootLayout->addWidget(topArea, 1);           // topArea takes all non-footer space
 
     // ══════════════════════════════════════════════════════════════
-    //  BOTTOM 2: Swappable Footer Stack
+    //  FOOTER STACK — strictly frozen, nothing can disturb it
     // ══════════════════════════════════════════════════════════════
     footerStack = new QStackedWidget(this);
 
@@ -328,7 +300,6 @@ void LeftPanel::setupUI()
     footerGrid->setSpacing(4);
     footerGrid->setContentsMargins(0, 4, 0, 0);
 
-    // ROW 0: 6 main action buttons
     m_btnServo = new QPushButton("⬤  OFF", this);
     m_btnServo->setStyleSheet(DS::btnOff());
     connect(m_btnServo, &QPushButton::clicked, [this]() {
@@ -359,10 +330,8 @@ void LeftPanel::setupUI()
         if (m_backend) m_backend->triggerExit();
     });
 
-    // Mode button – dropdown
     m_btnMode = new QPushButton("M: SIM", this);
-    m_btnMode->setStyleSheet(DS::btnSim() +
-                             " QPushButton::menu-indicator { image: none; }");
+    m_btnMode->setStyleSheet(DS::btnSim() + " QPushButton::menu-indicator { image: none; }");
 
     QMenu *modeMenu = new QMenu(m_btnMode);
     modeMenu->setStyleSheet(
@@ -375,7 +344,6 @@ void LeftPanel::setupUI()
     modeMenu->addAction(actSim);
     modeMenu->addAction(actReal);
     m_btnMode->setMenu(modeMenu);
-
     connect(actSim,  &QAction::triggered, [this]() { if (m_backend) m_backend->setSimMode();  });
     connect(actReal, &QAction::triggered, [this]() { if (m_backend) m_backend->setRealMode(); });
 
@@ -386,74 +354,74 @@ void LeftPanel::setupUI()
     footerGrid->addWidget(btnExit,    0, 4);
     footerGrid->addWidget(m_btnMode,  0, 5);
 
-    // ROW 1: System health + utility buttons
+    // ── System health button ──────────────────────────────────────
     m_btnSysHealth = new QPushButton("●  SYSTEM OK", this);
     m_btnSysHealth->setStyleSheet(DS::btnOK());
 
     connect(m_btnSysHealth, &QPushButton::clicked, this, [this]() {
+        // ── FIX: Use a completely local QVBoxLayout for the dialog frame.
+        //         NEVER touch m_mainLayout or rootLayout here. ──────────
         QDialog dialog(this);
         dialog.setFixedSize(360, 160);
         dialog.setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
-        dialog.setAttribute(Qt::WA_TranslucentBackground); // Crucial for clean borders
+        dialog.setAttribute(Qt::WA_TranslucentBackground);
         dialog.setStyleSheet("background: transparent;");
 
-        // 1. Create the Frame as the ONLY child of the dialog
         QFrame *mainFrame = new QFrame(&dialog);
         mainFrame->setObjectName("container");
 
-        // 2. Determine state & Colors
         QString currentErr = m_backend ? m_backend->property("errorMessage").toString() : "";
         QString errLower   = currentErr.toLower().trimmed();
-        bool isError = !currentErr.isEmpty() && errLower != "no active errors" && errLower != "no error" && errLower != "none";
+        bool isError = !currentErr.isEmpty()
+                       && errLower != "no active errors"
+                       && errLower != "no error"
+                       && errLower != "none";
         if (!isError) currentErr = "SYSTEM IS OPERATIONAL";
 
-        // 3. APPLY BORDER STYLES TO THE FRAME
         mainFrame->setStyleSheet(QString(
                                      "#container { background-color: #0d1117; border: 3px solid %1; border-radius: 8px; }"
                                      ).arg(isError ? "#FF5252" : "#22C55E"));
 
-        // 4. Use a layout that puts everything inside the frame
-        QVBoxLayout *mainLayout = new QVBoxLayout(mainFrame);
-        mainLayout->setContentsMargins(0, 0, 0, 0);
-        mainLayout->setSpacing(0); // Removes layout gap between header and message
+        // ── LOCAL layout for the frame — not m_mainLayout ──
+        QVBoxLayout *frameLayout = new QVBoxLayout(mainFrame);
+        frameLayout->setContentsMargins(0, 0, 0, 0);
+        frameLayout->setSpacing(0);
 
-        // --- HEADER BAR ---
         QWidget *headerBar = new QWidget();
-        headerBar->setStyleSheet("background-color: #1a1e2a; border-bottom: 1px solid #2a2d35; border-top-left-radius: 5px; border-top-right-radius: 5px;");
+        headerBar->setStyleSheet(
+            "background-color: #1a1e2a; border-bottom: 1px solid #2a2d35;"
+            "border-top-left-radius: 5px; border-top-right-radius: 5px;");
         QHBoxLayout *headerLay = new QHBoxLayout(headerBar);
-        // Reduced vertical margins to tighten the header
         headerLay->setContentsMargins(12, 4, 5, 4);
 
         QLabel *title = new QLabel("SYSTEM STATUS");
-        title->setStyleSheet("color: #00bcd4; font-weight: bold; font-size: 10px; letter-spacing: 1px; background: transparent;");
+        title->setStyleSheet(
+            "color: #00bcd4; font-weight: bold; font-size: 10px;"
+            "letter-spacing: 1px; background: transparent;");
 
         QPushButton *btnClose = new QPushButton("✖");
         btnClose->setFixedSize(24, 24);
-        btnClose->setStyleSheet("QPushButton { background: transparent; color: #888; font-size: 12px; border: none; } QPushButton:hover { color: #ff5252; }");
+        btnClose->setStyleSheet(
+            "QPushButton { background: transparent; color: #888; font-size: 12px; border: none; }"
+            "QPushButton:hover { color: #ff5252; }");
         connect(btnClose, &QPushButton::clicked, &dialog, &QDialog::close);
 
         headerLay->addWidget(title);
         headerLay->addStretch();
         headerLay->addWidget(btnClose);
-        mainLayout->addWidget(headerBar);
+        frameLayout->addWidget(headerBar);
 
-        // --- MESSAGE AREA ---
         QLabel *lblMsg = new QLabel(currentErr);
-        // Reduced top padding to 5px so it hugs the header
         lblMsg->setStyleSheet(QString(
-                                  "color: %1; font-family: 'Rajdhani', sans-serif; "
+                                  "color: %1; font-family: 'Rajdhani', sans-serif;"
                                   "font-weight: 700; font-size: 14px; padding: 5px 10px 10px 10px; background: transparent;"
                                   ).arg(isError ? "#FF5252" : "#E8EDF5"));
-
         lblMsg->setAlignment(Qt::AlignHCenter);
         lblMsg->setWordWrap(true);
+        frameLayout->addWidget(lblMsg, 0, Qt::AlignTop);
+        frameLayout->addStretch();
 
-        // Push the text to the top, right below the header
-        mainLayout->addWidget(lblMsg, 0, Qt::AlignTop);
-        // Add stretch to fill the rest of the 160px height with empty space
-        mainLayout->addStretch();
-
-        // Force the frame to fill the dialog
+        // ── Dialog outer layout ──
         QVBoxLayout *outer = new QVBoxLayout(&dialog);
         outer->setContentsMargins(0, 0, 0, 0);
         outer->addWidget(mainFrame);
@@ -462,6 +430,7 @@ void LeftPanel::setupUI()
         dialog.move(pos);
         dialog.exec();
     });
+
     footerGrid->addWidget(m_btnSysHealth, 1, 0, 1, 2);
 
     QPushButton *btnErrClr = new QPushButton("✕  ERRCLR", this);
@@ -485,7 +454,6 @@ void LeftPanel::setupUI()
     QPushButton *btnReset = new QPushButton("↺  RESET", this);
     btnReset->setStyleSheet(DS::btnReset());
 
-    // Speed badge (read-only display)
     QLabel *lblSpeed = new QLabel("S: 0.0 %", this);
     lblSpeed->setStyleSheet(DS::speedBadge());
     lblSpeed->setAlignment(Qt::AlignCenter);
@@ -513,8 +481,9 @@ void LeftPanel::setupUI()
         dialog.setStyleSheet(
             "QDialog { background-color: #141820; border: 1px solid #3A4460; border-radius: 8px; }");
 
-        QVBoxLayout *mainLayout = new QVBoxLayout(&dialog);
-        mainLayout->setContentsMargins(15, 15, 15, 15);
+        // ── FIX: purely local layout for the dialog — not m_mainLayout ──
+        QVBoxLayout *dlgLayout = new QVBoxLayout(&dialog);
+        dlgLayout->setContentsMargins(15, 15, 15, 15);
         QStackedWidget *stack = new QStackedWidget(&dialog);
 
         QString activeCategory = "TP";
@@ -549,8 +518,8 @@ void LeftPanel::setupUI()
         p0Layout->addStretch(); p0Layout->addWidget(btnClose);
 
         // PAGE 1 – operations
-        QWidget *page1 = new QWidget();
-        QVBoxLayout *p1Layout = new QVBoxLayout(page1);
+        QWidget *page1dlg = new QWidget();
+        QVBoxLayout *p1Layout = new QVBoxLayout(page1dlg);
         QLabel *lblTitle1 = new QLabel("OPERATIONS");
         lblTitle1->setStyleSheet("color: #8A9AB8; font-family: 'Rajdhani','Consolas',monospace;"
                                  "font-weight: 700; font-size: 13px; letter-spacing: 1.5px; border: none;");
@@ -590,7 +559,6 @@ void LeftPanel::setupUI()
         QPushButton *btnSubmitCreate = new QPushButton("CREATE");
         btnSubmitCreate->setStyleSheet(baseStyle + "QPushButton { background-color: #2E7D32; border-bottom: 4px solid #1B5E20; padding: 10px; }");
         btnSubmitCreate->setEnabled(false);
-
         connect(txtFilename, &QLineEdit::textChanged,
                 [btnSubmitCreate](const QString &text) { btnSubmitCreate->setEnabled(!text.trimmed().isEmpty()); });
         connect(btnSubmitCreate, &QPushButton::clicked, [&]() {
@@ -638,12 +606,9 @@ void LeftPanel::setupUI()
             "QListWidget::item { padding: 10px; border-bottom: 1px solid #1C2130; }"
             "QListWidget::item:selected { background-color: #003A55; color: #00D4FF; border-radius: 3px; }"
             "QListWidget::indicator { width: 22px; height: 22px; }");
-
         connect(txtSearch, &QLineEdit::textChanged, [fileList](const QString &text) {
-            for (int i = 0; i < fileList->count(); ++i) {
-                QListWidgetItem *item = fileList->item(i);
-                item->setHidden(!item->text().contains(text, Qt::CaseInsensitive));
-            }
+            for (int i = 0; i < fileList->count(); ++i)
+                fileList->item(i)->setHidden(!fileList->item(i)->text().contains(text, Qt::CaseInsensitive));
         });
 
         QHBoxLayout *p3BtnLayout = new QHBoxLayout();
@@ -691,9 +656,11 @@ void LeftPanel::setupUI()
         p3Layout->addWidget(fileList);
         p3Layout->addLayout(p3BtnLayout);
 
-        stack->addWidget(page0); stack->addWidget(page1);
-        stack->addWidget(page2); stack->addWidget(page3);
-        mainLayout->addWidget(stack);
+        stack->addWidget(page0);
+        stack->addWidget(page1dlg);   // ← renamed to avoid shadow with outer page1
+        stack->addWidget(page2);
+        stack->addWidget(page3);
+        dlgLayout->addWidget(stack);  // ← FIX: was m_mainLayout->addWidget(stack)
 
         auto populateFiles = [&]() {
             fileList->clear();
@@ -775,9 +742,8 @@ void LeftPanel::setupUI()
     btnAct1->setStyleSheet(DS::btnAction());
     connect(btnAct1, &QPushButton::clicked, this, [this]() {
         StepControl stepDialog(myMainWidget, this);
-        // Wire the step manager to change the Right Panel tab!
         connect(&stepDialog, &StepControl::requestDxfTab, this, [this]() {
-            emit requestTabChange(5); // 5 is the index of the new DXF tab
+            emit requestTabChange(5);
         });
         stepDialog.exec();
     });
@@ -794,7 +760,6 @@ void LeftPanel::setupUI()
     swipeGrid->addWidget(m_lblTR,     0, 3);
     swipeGrid->addWidget(btnTools,    0, 4);
     swipeGrid->addWidget(lblToolName, 0, 5);
-
     swipeGrid->addWidget(btnAct1, 1, 0);
     swipeGrid->addWidget(btnAct2, 1, 1);
     swipeGrid->addWidget(btnAct3, 1, 2);
@@ -805,16 +770,16 @@ void LeftPanel::setupUI()
     footerStack->addWidget(page0);
     footerStack->addWidget(page1);
 
-    // ✅ THE FIX: Lock the height in both directions and disable stretching
-    footerStack->setMinimumHeight(110);
-    footerStack->setMaximumHeight(120);
-    mainLayout->addWidget(footerStack, 0);
+    // ── FOOTER LOCK: setFixedHeight + Fixed policy = nothing can disturb it ──
+    footerStack->setFixedHeight(120);
+    footerStack->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    rootLayout->addWidget(footerStack, 0);   // stretch=0 — footer never grows
 
+    // ── Timers & event filter ─────────────────────────────────────
     QTimer::singleShot(500, myMainWidget, &OcctWidget::loadDefaultRobot);
     qApp->installEventFilter(this);
     dragStartPos = QPoint(-1, -1);
 
-    // Simulation tick
     QTimer *dummyTimer = new QTimer(this);
     connect(dummyTimer, &QTimer::timeout, this, [this]() {
         if (!this->isVisible()) return;
@@ -832,22 +797,12 @@ void LeftPanel::setupUI()
         }
     });
     dummyTimer->start(50);
-    // ==========================================================
-    // ✅ THE ULTIMATE X11 SYNC HACK: The "Margin Jiggle"
-    // ==========================================================
-    // We listen for the robot to finish loading (which takes a second or two).
-    // Once it is done, we invisibly change the layout margin by 1 pixel and
-    // instantly change it back. This mathematically forces Qt to fire a real
-    // QResizeEvent down to the 3D window, perfectly syncing Linux X11!
+
     connect(myMainWidget, &OcctWidget::robotLoadComplete, this, [this]() {
         QTimer::singleShot(50, this, [this]() {
             int left, top, right, bottom;
             this->layout()->getContentsMargins(&left, &top, &right, &bottom);
-
-            // 1. Shrink the layout by exactly 1 pixel
             this->layout()->setContentsMargins(left, top, right + 1, bottom);
-
-            // 2. Wait 50ms, then snap it back to normal
             QTimer::singleShot(50, this, [this, left, top, right, bottom]() {
                 this->layout()->setContentsMargins(left, top, right, bottom);
             });
@@ -864,7 +819,6 @@ void LeftPanel::updateTelemetryUI()
     if (m_uiThrottleTimer.elapsed() < 33) return;
     m_uiThrottleTimer.restart();
 
-    // Coordinates
     lblXYZ->setText(QString("X  %1 mm\nY  %2 mm\nZ  %3 mm")
                         .arg(m_backend->property("x").toDouble(), 0, 'f', 3)
                         .arg(m_backend->property("y").toDouble(), 0, 'f', 3)
@@ -874,13 +828,11 @@ void LeftPanel::updateTelemetryUI()
                         .arg(m_backend->property("b").toDouble(), 0, 'f', 3)
                         .arg(m_backend->property("c").toDouble(), 0, 'f', 3));
 
-    // Joints
     for (int i = 0; i < 6; i++)
         m_lblJoints[i]->setText(
             QString("J%1\n%2°").arg(i + 1)
                 .arg(m_backend->property(QString("j%1").arg(i + 1).toUtf8().constData()).toDouble(), 0, 'f', 3));
 
-    // 3-D robot posture
     if (myMainWidget) {
         const double d2r = 3.14159265358979323846 / 180.0;
         myMainWidget->updateRobotPosture(
@@ -892,7 +844,6 @@ void LeftPanel::updateTelemetryUI()
             m_backend->property("j6").toDouble() * d2r);
     }
 
-    // ── Button state updates ───────────────────────────────────────
     if (m_backend->property("isServoOn").toBool()) {
         m_btnServo->setText("⬤  ON");
         m_btnServo->setStyleSheet(DS::btnOK());
@@ -917,19 +868,18 @@ void LeftPanel::updateTelemetryUI()
         m_btnStart->setStyleSheet(DS::btnStart());
     }
 
-    QString currentMode    = m_backend->property("currentMode").toString();
-    QString btnModeExtra   = " QPushButton::menu-indicator { image: none; }";
+    QString currentMode  = m_backend->property("currentMode").toString();
+    QString btnModeExtra = " QPushButton::menu-indicator { image: none; }";
     m_btnMode->setText("M: " + currentMode.toUpper());
     m_btnMode->setStyleSheet((currentMode == "Sim" ? DS::btnSim() : DS::btnReal()) + btnModeExtra);
 
-    // ── System health ─────────────────────────────────────────────
-    QString errorMsg   = m_backend->property("errorMessage").toString().trimmed();
-    bool isEmergency   = m_backend->property("isEmergency").toBool();
-    QString errLower   = errorMsg.toLower();
-    bool hasError      = isEmergency || (!errorMsg.isEmpty() &&
-                                    errLower != "no active errors" &&
-                                    errLower != "no error" &&
-                                    errLower != "none");
+    QString errorMsg  = m_backend->property("errorMessage").toString().trimmed();
+    bool isEmergency  = m_backend->property("isEmergency").toBool();
+    QString errLower  = errorMsg.toLower();
+    bool hasError     = isEmergency || (!errorMsg.isEmpty()
+                                    && errLower != "no active errors"
+                                    && errLower != "no error"
+                                    && errLower != "none");
 
     if (hasError) {
         m_btnSysHealth->setText("⚠  VIEW ERROR");

@@ -62,8 +62,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
                 connect(this->leftPanel->getMainOcctWidget(),  &OcctWidget::partSelectedForIsolation,
                         this->rightPanel->getDxfPreviewWidget(), &OcctWidget::displayIsolatedPart);
 
-                connect(this->leftPanel,  &LeftPanel::partSelectionStateChanged,
-                        this->rightPanel, &RightPanel::setGetPointsEnabled);
 
                 connect(this->rightPanel, &RightPanel::swipeLockToggled,
                         this->leftPanel,  &LeftPanel::setSwipeEnabled);

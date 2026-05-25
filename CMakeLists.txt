@@ -31,6 +31,7 @@ qt_add_executable(appOCCT
 # ✅ 2. ADDED Qt6::Qml and Qt6::Quick3D to target_link_libraries
 target_link_libraries(appOCCT
     PRIVATE
+    # --- Qt Libraries ---
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
@@ -38,10 +39,49 @@ target_link_libraries(appOCCT
     Qt6::WebSockets
     Qt6::Qml
     Qt6::Quick3D
-    TKernel TKMath TKG2d TKG3d TKGeomBase TKGeomAlgo TKBRep TKTopAlgo
-    TKMesh TKService TKOpenGl TKV3d TKXSBase TKSTEP TKSTEPBase TKSTEPAttr
-    TKIGES TKShHealing TKSTL  TKPrim orocos-kdl
+
+    # --- OCCT Core & Math ---
+    TKernel
+    TKMath
+
+    # --- OCCT Geometry & Topology ---
+    TKG2d
+    TKG3d
+    TKGeomBase
+    TKGeomAlgo
+    TKBRep
+    TKTopAlgo
+    TKPrim
+    TKBO
+    TKShHealing
+
+    # --- OCCT Mesh & Visualization ---
+    TKMesh
+    TKRWMesh
+    TKService
+    TKV3d
+    TKOpenGl
+
+    # --- OCCT Basic Data Exchange (STL, STEP, IGES) ---
+    TKSTL
+    TKXSBase
+    TKSTEPBase
+    TKSTEPAttr
+    TKSTEP209
+    TKSTEP
+    TKIGES
+
+    # --- OCCT XDE (Extended Data Exchange for Colors & Assemblies) ---
+    TKCAF        # TDocStd_Document
+    TKLCAF       # Lite CAF (Labels, Trees)
+    TKVCAF       # XCAFPrs_AISObject (Viewer integration)
+    TKXCAF       # XCAFApp, XCAFDoc_ShapeTool, XCAFDoc_ColorTool
+    TKXDESTEP    # Specialized XDE STEP Reader
+
+    # --- External Libraries ---
+    orocos-kdl
 )
+
 
 target_include_directories(appOCCT PRIVATE ${OpenCASCADE_INCLUDE_DIR})
 
