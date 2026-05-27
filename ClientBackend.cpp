@@ -109,12 +109,11 @@ void ClientBackend::sendTextMessage(const QString &msg)
         m_socket->sendTextMessage(msg);
     }
 }
-// 1. Add the method implementation for formatting the payload:
-void ClientBackend::updateJointLimits(QJsonObject limits) {
+void ClientBackend::updateRobotSettings(QJsonObject settings) {
     if (m_socket->state() == QAbstractSocket::ConnectedState) {
         QJsonObject req;
-        req["command"] = "UPDATE_JOINT_LIMITS";
-        req["data"] = limits;
+        req["command"] = "UPDATE_ROBOT_SETTINGS";
+        req["data"] = settings;
         m_socket->sendTextMessage(QJsonDocument(req).toJson(QJsonDocument::Compact));
     }
 }
@@ -142,9 +141,9 @@ void ClientBackend::onTextMessageReceived(const QString &message)
     else if (type == "user_creation_result" || type == "user_delete_result" || type == "user_modify_result") {
         emit userModificationResult();
     }
-    else if (type == "joint_limits_data") {
-        m_jointLimits = json["data"].toObject();
-        emit jointLimitsChanged();
+    else if (type == "robot_settings_data") {
+        m_robotSettings = json["data"].toObject();
+        emit robotSettingsChanged();
     }
     // --- SPLIT-STREAM DATA ---
     else if (type == "telemetry") {
@@ -170,6 +169,21 @@ void ClientBackend::onTextMessageReceived(const QString &message)
         m_isPhysicallyMoving = json["is_physically_moving"].toBool();
         m_digitalInputVal = json["di_val"].toInt();
         m_digitalOutputVal = json["do_val"].toInt();
+        QJsonArray rawArray = json["encoder_raw"].toArray();
+        QJsonArray offsetArray = json["encoder_offset"].toArray();
+
+        m_encoderRawValues.clear();
+        m_encoderOffsetValues.clear();
+
+        for(const QJsonValue& val : rawArray) {
+            m_encoderRawValues.append(val.toDouble());
+        }
+
+        for(const QJsonValue& val : offsetArray) {
+            m_encoderOffsetValues.append(val.toDouble());
+        }
+
+        emit encoderDataChanged();
 
         emit telemetryChanged(); // Batches all updates to QML at once!
     }

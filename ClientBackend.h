@@ -79,7 +79,7 @@ class ClientBackend : public QObject
     Q_PROPERTY(QString tpRunModeName MEMBER m_tpRunModeName NOTIFY directoryDataChanged)
     Q_PROPERTY(double speedOp MEMBER m_speedOp NOTIFY directoryDataChanged)
     Q_PROPERTY(QString programCountOutput MEMBER m_programCountOutput NOTIFY directoryDataChanged)
-    Q_PROPERTY(QJsonObject jointLimits MEMBER m_jointLimits NOTIFY jointLimitsChanged)
+    Q_PROPERTY(QJsonObject robotSettings MEMBER m_robotSettings NOTIFY robotSettingsChanged)
 
     // --- UI/LOCAL STATE ---
     Q_PROPERTY(bool isMoveMode MEMBER m_isMoveMode NOTIFY localStateChanged)
@@ -88,6 +88,9 @@ class ClientBackend : public QObject
     // --- GEOMETRY POINTERS ---
     Q_PROPERTY(LineGeometry* blueLine READ blueLine WRITE setBlueLine NOTIFY blueLineChanged)
     Q_PROPERTY(LineGeometry* redLine READ redLine WRITE setRedLine NOTIFY redLineChanged)
+
+    Q_PROPERTY(QVariantList encoderRawValues MEMBER m_encoderRawValues NOTIFY encoderDataChanged)
+    Q_PROPERTY(QVariantList encoderOffsetValues MEMBER m_encoderOffsetValues NOTIFY encoderDataChanged)
 
 public:
     explicit ClientBackend(QObject *parent = nullptr);
@@ -110,9 +113,8 @@ public:
     Q_INVOKABLE void sendCmd(QString cmd, QVariant val = QVariant());
     Q_INVOKABLE void sendTextMessage(const QString &msg);
 
-    Q_INVOKABLE void requestJointLimits() { sendCmd("GET_JOINT_LIMITS"); }
-    Q_INVOKABLE void updateJointLimits(QJsonObject limits);
-    Q_INVOKABLE void resetJointLimits() { sendCmd("DELETE_JOINT_LIMITS"); }
+    Q_INVOKABLE void requestRobotSettings() { sendCmd("GET_ROBOT_SETTINGS"); }
+    Q_INVOKABLE void updateRobotSettings(QJsonObject settings);
 
     // --- SPECIFIC COMMANDS ---
     Q_INVOKABLE void toggleServo() { sendCmd("TOGGLE_SERVO"); }
@@ -196,6 +198,7 @@ public:
 
     Q_INVOKABLE void calculateTrajectory() { sendCmd("CALCULATE_TRAJECTORY"); }
     Q_INVOKABLE void cancelCalculation() { sendCmd("CANCEL_CALCULATION"); }
+    Q_INVOKABLE void triggerEncoderZero() { sendCmd("TRIGGER_ENC_ZERO"); }
 
 signals:
     void connectionChanged();
@@ -219,7 +222,8 @@ signals:
     void userListResult(QString roleType, QVariantList users);
     void userModificationResult();
     void highlightedInstructionChanged(); // ADD THIS NEW SIGNAL
-    void jointLimitsChanged();
+    void robotSettingsChanged();
+    void encoderDataChanged();
 
 private slots:
     void onConnected();
@@ -288,7 +292,10 @@ private:
 
     LineGeometry *m_blueLine = nullptr;
     LineGeometry *m_redLine = nullptr;
-    QJsonObject m_jointLimits;
+    QJsonObject m_robotSettings;
+
+    QVariantList m_encoderRawValues;
+    QVariantList m_encoderOffsetValues;
 };
 
 #endif // CLIENTBACKEND_H

@@ -91,6 +91,7 @@ private:
     QPushButton *btnYPlus = nullptr, *btnYMinus = nullptr;
     QPushButton *btnZPlus = nullptr, *btnZMinus = nullptr;
     QPushButton *m_btnGetPoints;
+    QPushButton *m_btnRunDxf; // Add this to your private variables in RightPanel.h
     QString currentMovementMode = "JOG";
 
     // ---- Workspace tabs (shared, always present) ----

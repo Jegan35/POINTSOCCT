@@ -905,8 +905,6 @@ QWidget* RightPanel::buildDxfFileWidget()
     dxfLayout->addWidget(dxfViewArea, 1);
     dxfLayout->addWidget(dxfControlArea, 1);
 
-    // ... (Keep the rest of your wiring connections the same)
-
     // ==========================================
     // ✅ WIRING FIX: Update new Cyan Origin box!
     // ==========================================
